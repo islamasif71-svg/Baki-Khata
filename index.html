@@ -179,7 +179,19 @@ body.dm .ab.has{background:#162032;color:#64b5f6;border-color:#1e3a5f;}
 body.dm .ci h3,.body.dm .dinfo h2{color:#ddd;}
 body.dm .ci h3{color:#ddd;}
 body.dm .dinfo h2{color:#ddd;}
-body.dm .bklog{background:#161616;color:#aaa;}
+.wabtn{background:#25D366;color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;transition:.18s;display:flex;align-items:center;gap:5px;}
+.wabtn:hover{background:#128C7E;}
+.wa-mini{background:#25D366;color:#fff;border:none;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;white-space:nowrap;}
+.wa-mini:hover{background:#128C7E;}
+/* WhatsApp Preview Modal */
+#wa-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:10500;justify-content:center;align-items:flex-end;}
+#wa-modal.open{display:flex;}
+.wa-box{background:#fff;border-radius:18px 18px 0 0;padding:18px 16px 28px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 -6px 36px rgba(0,0,0,.25);animation:sup .28s ease;}
+.wa-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:2px solid #25D366;padding-bottom:8px;}
+.wa-hdr h3{font-size:14px;color:#075e54;margin:0;}
+.wa-recip{background:#e2fce8;border:1px solid #a5d6a7;border-radius:7px;padding:8px 11px;font-size:12px;color:#1b5e20;margin-bottom:10px;}
+.wa-textarea{width:100%;padding:10px;border:1.5px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;min-height:240px;line-height:1.6;}
+.wa-textarea:focus{border-color:#25D366;}
 </style>
 </head>
 <body>
@@ -269,6 +281,7 @@ body.dm .bklog{background:#161616;color:#aaa;}
     <button class="pbtn" id="bpay" onclick="openPay()" style="display:none;">💰 জমা দিন</button>
     <button class="ebtn" id="bentry" onclick="openEntry()" style="display:none;">📝 এন্ট্রি</button>
     <button class="ecbtn" id="beditc" onclick="openEditC()" style="display:none;">✏️ সম্পাদনা</button>
+    <button class="wabtn" id="bwa" onclick="openWA(curKey)" style="display:none;">💬 WhatsApp</button>
     <button class="del-cust-btn" id="bdelc" onclick="delCust()" style="display:none;">🗑 নাম ডিলিট</button>
   </div>
   <div class="lcard">
@@ -370,6 +383,22 @@ body.dm .bklog{background:#161616;color:#aaa;}
     </div>
     <div class="fg"><label>বিবরণ / নোট</label><input type="text" id="eenote" placeholder="কেনার বিবরণ..."></div>
     <div class="macts"><button class="bconf" onclick="saveEditEnt()">✅ আপডেট</button><button class="bcanc" onclick="cm('m-editent')">বাতিল</button></div>
+  </div>
+</div>
+
+<!-- Modal: WhatsApp -->
+<div id="wa-modal">
+  <div class="wa-box">
+    <div class="wa-hdr">
+      <h3>💬 WhatsApp মেসেজ পাঠান</h3>
+      <button class="mcl" onclick="closeWA()">✕</button>
+    </div>
+    <div class="wa-recip" id="wa-recip">প্রাপক: —</div>
+    <textarea class="wa-textarea" id="wa-text"></textarea>
+    <div class="macts" style="margin-top:12px;">
+      <button class="bconf" style="background:#25D366;font-size:13px;" onclick="sendWA()">📤 WhatsApp-এ পাঠান</button>
+      <button class="bcanc" onclick="closeWA()">বাতিল</button>
+    </div>
   </div>
 </div>
 
@@ -498,7 +527,11 @@ function renderCList(q='',al='all'){
     const ce=AE[key]||{},ec=Object.keys(ce).length,ld=Object.values(ce).map(e=>e.date).filter(Boolean).sort().reverse()[0]||'';
     h+=`<div class="cc" onclick="openCust('${key}')">
       <div class="ci"><h3>👤 ${c.name||'—'}</h3><p>📞 ${c.phone||'নম্বর নেই'} | ${ec}টি এন্ট্রি${ld?' | শেষ: '+fdate(ld):''}</p>${c.address?`<p style="font-size:9px;color:#aaa;">📍 ${c.address}</p>`:''}</div>
-      <div class="cdue"><span class="da">${famt(due)}</span><span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span></div>
+      <div class="cdue" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+        <span class="da">${famt(due)}</span>
+        <span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span>
+        ${c.phone&&due>0?`<button class="wa-mini" onclick="event.stopPropagation();openWA('${key}')">💬 WA</button>`:''}
+      </div>
     </div>`;
   });
   grid.innerHTML=h;
@@ -522,6 +555,9 @@ function openCust(key){
   document.getElementById('dphone').textContent=`📞 ${c.phone||'নম্বর নেই'}${c.address?' | 📍'+c.address:''}`;
   document.getElementById('ddue').textContent=famt(c.totalDue||0);
   ['bpay','bentry','beditc','bdelc'].forEach(i=>{const el=document.getElementById(i);if(el)el.style.display=isAdmin?'block':'none';});
+  // WhatsApp বাটন — phone থাকলে সবসময় দেখাবে (admin লাগবে না)
+  const bwa=document.getElementById('bwa');
+  if(bwa) bwa.style.display=(c.phone&&(c.totalDue||0)>0)?'flex':'none';
   renderDet(key);renderPayH(key);
 }
 function backToList(){
@@ -867,8 +903,64 @@ function cm(id){document.getElementById(id).classList.remove('open');}
 /* ═══════ DARK MODE ═══════ */
 function toggleDark(){const d=document.body.classList.toggle('dm');document.getElementById('dtog').textContent=d?'☀️':'🌙';localStorage.setItem('bk_dm',d?'1':'0');}
 
+/* ═══════ WHATSAPP ═══════ */
+let _waKey=null;
+
+function openWA(key){
+  const c=AC[key]||{};
+  if(!c.phone){toast('⚠️','ফোন নম্বর নেই','এই গ্রাহকের ফোন নম্বর নেই','warn');return;}
+  _waKey=key;
+  const due=Math.round(c.totalDue||0);
+  const msg=
+`আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহি ওয়া বারাকাতুহু ☪️
+
+প্রিয় ${c.name},
+
+আশা রাখি আল্লাহর অশেষ রহমতে আপনি ও আপনার পরিবার সুস্থ ও ভালো আছেন। 🤲
+
+আপনার বিশ্বাস ও ভালোবাসাই আমাদের সবচেয়ে বড় পাওয়া।
+
+🧾 বকেয়া হিসাব
+━━━━━━━━━━━━━━━
+দোকান: হাজী মোদাচ্ছের ক্লথ স্টোর
+নাম: ${c.name}
+বাকি: ৳ ${due.toLocaleString('en-IN')}/-
+━━━━━━━━━━━━━━━
+
+অনুগ্রহ করে বকেয়া পরিশোধ করুন। 🙏
+
+জাযাকাল্লাহু খাইরান
+— হাজী মোদাচ্ছের ক্লথ স্টোর
+📍 সন্দীপ কমপ্লেক্স, চট্টগ্রাম
+📞 ০১৭০৯-৩৪২০১৮`;
+
+  document.getElementById('wa-recip').textContent=`প্রাপক: ${c.name} (${c.phone})`;
+  document.getElementById('wa-text').value=msg;
+  document.getElementById('wa-modal').classList.add('open');
+}
+
+function sendWA(){
+  const c=AC[_waKey]||{};
+  if(!c.phone){toast('⚠️','ফোন নম্বর নেই','','warn');return;}
+  const msg=document.getElementById('wa-text').value.trim();
+  if(!msg){toast('⚠️','মেসেজ খালি','','warn');return;}
+  // ফোন নম্বর ফরম্যাট: 01XXXXXXXXX → 8801XXXXXXXXX
+  let phone=c.phone.replace(/\D/g,''); // শুধু সংখ্যা রাখো
+  if(phone.startsWith('0'))phone='88'+phone;
+  else if(!phone.startsWith('880'))phone='880'+phone;
+  const url='https://wa.me/'+phone+'?text='+encodeURIComponent(msg);
+  closeWA();
+  window.open(url,'_blank');
+  toast('💬','WhatsApp খুলছে',c.name+'-এর নম্বরে মেসেজ পাঠান');
+}
+
+function closeWA(){
+  document.getElementById('wa-modal').classList.remove('open');
+  _waKey=null;
+}
+
 /* ═══════ KEYBOARD ═══════ */
-window.onkeydown=e=>{if(e.key==='Escape')['m-addc','m-editc','m-entry','m-pay','m-view','m-editent','pinov'].forEach(i=>{const el=document.getElementById(i);if(el)el.classList.remove('open');});if(e.key==='Enter'&&document.getElementById('pinov').classList.contains('open'))chkPin();};
+window.onkeydown=e=>{if(e.key==='Escape'){['m-addc','m-editc','m-entry','m-pay','m-view','m-editent','pinov'].forEach(i=>{const el=document.getElementById(i);if(el)el.classList.remove('open');});closeWA();}if(e.key==='Enter'&&document.getElementById('pinov').classList.contains('open'))chkPin();};
 </script>
 </body>
 </html>
