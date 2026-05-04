@@ -664,7 +664,11 @@ function delEntry(eid,key,amount){
   }
   // ══ ম্যানুয়াল এন্ট্রি হলে: invoice ডিলিট + daily_credit_entries আপডেট ══
   if(e.type==='manual'){
-    if(e.invoiceId) db.ref('invoices/'+e.invoiceId).remove(); // Maincode থেকেও মুছো
+    if(e.invoiceId){
+      db.ref('invoices/'+e.invoiceId).remove(); // Firebase থেকে মুছো
+      // ══ Sheet থেকেও মুছো ══
+      fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:e.invoiceId}})}).catch(()=>{});
+    }
     if(entDate) db.ref(`${CB}/daily_credit_entries/${entDate}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)-amount)),lastUpdate:Date.now()}));
   }
   toast('🗑','এন্ট্রি মুছেছে',`${famt(amount)} বাদ দেওয়া হয়েছে`);
@@ -678,7 +682,11 @@ function delPayment(pk,key,amount){
   // ══ আগে payment data পড়ো → invoiceId নিয়ে invoice মুছো ══
   db.ref(`${CB}/payments/${key}/${pk}`).once('value', snap => {
     const pd = snap.val()||{};
-    if(pd.invoiceId) db.ref('invoices/'+pd.invoiceId).remove(); // payment memo মুছো
+    if(pd.invoiceId){
+      db.ref('invoices/'+pd.invoiceId).remove(); // Firebase থেকে মুছো
+      // ══ Sheet থেকেও মুছো ══
+      fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:pd.invoiceId}})}).catch(()=>{});
+    }
     db.ref(`${CB}/payments/${key}/${pk}`).remove();
     db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.round((cur||0)+amount));
     db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
@@ -817,8 +825,30 @@ function saveMEntry(){
 
     // ══ Maincode-এর invoices/-এ একই ID দিয়ে invoice তৈরি ══
     // invoice_counter-এর newId ব্যবহার → Maincode-এর নম্বর sequence ঠিক থাকে
-    db.ref('invoices/'+newId).set({
-      id:       newId,            // Maincode-এর counter থেকে আসা ID
+    // ══ Manual entry HTML রশিদ তৈরি (Maincode-এর মতো) ══
+    const manualHtml=`<div style="width:58mm;font-family:'Arial',sans-serif;font-size:12px;padding:5px;background:white;color:#000;">
+      <center>
+        <b style="font-size:16px;">হাজী মোদাচ্ছের ক্লথ স্টোর</b><br>
+        <span style="font-size:10px;">সন্দীপ কমপ্লেক্স, চট্টগ্রাম | ০১৭০৯-৩৪২০১৮</span>
+        <div style="border-top:1px dashed #000;margin:5px 0;"></div>
+        <b style="font-size:13px;color:red;">🔴 বাকি এন্ট্রি</b>
+      </center>
+      <table width="100%" style="font-size:11px;margin:5px 0;">
+        <tr><td>রশিদ: <b>#${newId}</b></td><td align="right">তারিখ: ${fdate(dt)}</td></tr>
+        <tr><td colspan="2">গ্রাহক: <b>${c.name||''}</b>${c.phone?' ('+c.phone+')':''}</td></tr>
+        <tr><td colspan="2">নোট: ${note}</td></tr>
+      </table>
+      <div style="border-top:1px dashed #000;margin:5px 0;"></div>
+      <table width="100%" style="font-size:13px;font-weight:bold;">
+        <tr><td>মোট বিল:</td><td align="right">${total}/-</td></tr>
+        <tr><td>জমা:</td><td align="right">${paid}/-</td></tr>
+        <tr style="font-size:15px;color:red;"><td>বাকি:</td><td align="right">${due}/-</td></tr>
+      </table>
+      <center style="font-size:10px;margin-top:8px;">ধন্যবাদ, আবার আসবেন!</center>
+    </div>`;
+
+    const invoiceDoc={
+      id:       newId,
       memoRef:  memoRef,
       name:     c.name,
       phone:    c.phone   ||'',
@@ -833,12 +863,17 @@ function saveMEntry(){
       seller:   'বাকি খাতা',
       source:   'manual_baki',
       custKey:  key,
+      html:     manualHtml,
       createdAt: Date.now()
-    });
+    };
+
+    db.ref('invoices/'+newId).set(invoiceDoc);
 
     cm('m-entry');
     toast('📝','এন্ট্রি ও মেমো যোগ হয়েছে',`${c.name} — ${famt(due)} | মেমো: #${newId}`);
     bkPush('manual_entry',{...ed,invoiceId:newId});
+    // ══ Maincode-এর Sheet-এও ব্যাকআপ পাঠাও ══
+    bkSendToMainSheet(invoiceDoc);
   });
 }
 
@@ -911,7 +946,7 @@ function confPay(){
     db.ref(`${CB}/daily_receipts/${today}/entries`).push(pd);
 
     // ══ invoices/-এ HTML সহ সেভ (source:'payment_baki' → রিপোর্টে বিক্রয় হিসেবে গণনা হবে না) ══
-    db.ref('invoices/'+newId).set({
+    const payInvoiceDoc={
       id:       newId,
       memoRef:  String(newId),
       name:     c.name||'',
@@ -928,11 +963,14 @@ function confPay(){
       custKey:  key,
       html:     payHtml,
       createdAt: Date.now()
-    });
+    };
+    db.ref('invoices/'+newId).set(payInvoiceDoc);
 
     cm('m-pay');
     toast('💰','পেমেন্ট সফল',`${c.name||''} — ${famt(totAp)} | মেমো: #${newId}`);
     bkPush('payment',pd);
+    // ══ Maincode-এর Sheet-এও ব্যাকআপ পাঠাও ══
+    bkSendToMainSheet(payInvoiceDoc);
     renderDet(key);renderPayH(key);
   });
 }
@@ -1026,6 +1064,49 @@ function renderBkRp(out){
   <div class="rprow"><span>3️⃣ Auto Snapshot</span><span>প্রতি ৫ মিনিটে স্বয়ংক্রিয়</span></div>
   <p style="font-size:10px;color:#555;margin-top:6px;">✅ Sheets-এ কিছু এডিট করতে হবে না। এখান থেকেই সব যায়।</p></div>`;
 }
+
+/* ═══════ MAINCODE SHEET BACKUP ═══════ */
+// GAS-এ type:'invoice' আগে থেকেই handle হয় → saveInvoice(data) → {status:'ok'}
+// Maincode-এর bkSend হুবহু একই format — GAS একটুও বদলাতে হবে না
+// response পড়া যায় → সফল/ব্যর্থ toast দেখাবে
+function bkSendToMainSheet(invoiceData){
+  fetch(SURL,{method:'POST',body:JSON.stringify({type:'invoice',data:invoiceData})})
+    .then(r=>r.json())
+    .then(res=>{
+      if(res.status==='ok'){
+        toast('☁️','Sheet ব্যাকআপ সফল',`মেমো #${invoiceData.id} Sheet-এ সেভ হয়েছে`);
+        _bkMainSendPending(); // পুরনো pending থাকলে পাঠাও
+      } else throw new Error('sheet_err');
+    })
+    .catch(()=>{
+      // নেটওয়ার্ক সমস্যা → pending-এ রাখো, online হলে পাঠাবে
+      const p=JSON.parse(localStorage.getItem('bk_main_pending')||'[]');
+      p.push({type:'invoice',data:invoiceData,time:Date.now()});
+      localStorage.setItem('bk_main_pending',JSON.stringify(p));
+      toast('⚠️','Sheet Pending',`মেমো #${invoiceData.id} — ইন্টারনেট আসলে পাঠাবে`,'warn');
+    });
+}
+// Pending মেমোগুলো পাঠানো (online হলে)
+function _bkMainSendPending(){
+  const p=JSON.parse(localStorage.getItem('bk_main_pending')||'[]');
+  if(!p.length)return;
+  let sent=0;
+  p.forEach((item,i)=>{
+    setTimeout(()=>{
+      fetch(SURL,{method:'POST',body:JSON.stringify({type:item.type,data:item.data})})
+        .then(r=>r.json()).then(res=>{
+          if(res.status==='ok'){
+            sent++;
+            const rem=JSON.parse(localStorage.getItem('bk_main_pending')||'[]').filter(x=>x.time!==item.time);
+            localStorage.setItem('bk_main_pending',JSON.stringify(rem));
+            if(sent===p.length)toast('☁️','সব Pending সেভ',`${sent}টি মেমো Sheet-এ পাঠানো হয়েছে`);
+          }
+        }).catch(()=>{});
+    },i*2000);
+  });
+}
+// Online হলে pending পাঠাও
+window.addEventListener('online',()=>_bkMainSendPending());
 
 /* ═══════ BACKUP ═══════ */
 function bkPush(type,data){
