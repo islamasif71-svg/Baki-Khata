@@ -685,6 +685,23 @@ function delPayment(pk,key,amount){
     // পেমেন্টের তারিখের daily receipt থেকে বাদ দাও
     const payDate = pd.date || gtd();
     db.ref(`${CB}/daily_receipts/${payDate}/total`).transaction(cur=>Math.max(0,Math.round((cur||0)-amount)));
+    // ══ প্রতিটি entry-র remainingDue পূর্বাবস্থায় ফিরিয়ে দাও ══
+    // appliedTo-তে {memoId, date, amount} আছে — কোন memo-তে কত টাকা দেওয়া হয়েছিল
+    if(pd.appliedTo && pd.appliedTo.length){
+      pd.appliedTo.forEach(ap => {
+        if(!ap.memoId || !(ap.amount>0)) return;
+        db.ref(`${CB}/entries/${key}/${ap.memoId}`).transaction(cur => {
+          if(!cur) return cur;
+          const newRem = Math.min(
+            Math.round((cur.remainingDue||0) + ap.amount),
+            cur.originalDue||0   // originalDue-এর বেশি হতে পারবে না
+          );
+          // status: পুরো বাকি থাকলে 'due', আংশিক থাকলে 'partial'
+          const newStatus = newRem >= (cur.originalDue||0) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
+          return {...cur, remainingDue: newRem, status: newStatus};
+        });
+      });
+    }
     toast('🗑','পেমেন্ট মুছেছে',`${famt(amount)} বাকিতে ফেরত গেছে`);
     renderDet(key);renderPayH(key);
   });
