@@ -863,17 +863,14 @@ function saveMEntry(){
       seller:   'বাকি খাতা',
       source:   'manual_baki',
       custKey:  key,
-      html:     manualHtml,
       createdAt: Date.now()
     };
-
-    db.ref('invoices/'+newId).set(invoiceDoc);
+    db.ref('invoices/'+newId).set(invoiceDoc); // Firebase — html ছাড়া ✅
+    bkSendToMainSheet({...invoiceDoc, html: manualHtml}); // Sheet — html সহ ✅
 
     cm('m-entry');
     toast('📝','এন্ট্রি ও মেমো যোগ হয়েছে',`${c.name} — ${famt(due)} | মেমো: #${newId}`);
     bkPush('manual_entry',{...ed,invoiceId:newId});
-    // ══ Maincode-এর Sheet-এও ব্যাকআপ পাঠাও ══
-    bkSendToMainSheet(invoiceDoc);
   });
 }
 
@@ -961,16 +958,14 @@ function confPay(){
       seller:   'বাকি খাতা',
       source:   'payment_baki',
       custKey:  key,
-      html:     payHtml,
       createdAt: Date.now()
     };
-    db.ref('invoices/'+newId).set(payInvoiceDoc);
+    db.ref('invoices/'+newId).set(payInvoiceDoc); // Firebase — html ছাড়া ✅
+    bkSendToMainSheet({...payInvoiceDoc, html: payHtml}); // Sheet — html সহ ✅
 
     cm('m-pay');
     toast('💰','পেমেন্ট সফল',`${c.name||''} — ${famt(totAp)} | মেমো: #${newId}`);
     bkPush('payment',pd);
-    // ══ Maincode-এর Sheet-এও ব্যাকআপ পাঠাও ══
-    bkSendToMainSheet(payInvoiceDoc);
     renderDet(key);renderPayH(key);
   });
 }
