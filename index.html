@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v53 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -652,26 +652,34 @@ function delEntry(eid,key,amount){
   if(!confirm(`এই এন্ট্রিটি (${famt(amount)}) ডিলিট হবে!\n\nগ্রাহকের মোট বাকি থেকে এই পরিমাণ বাদ যাবে।`))return;
   const e=(AE[key]||{})[eid]||{};
   const entDate=e.date||null;
+  // ✅ Fix: totalDue থেকে remainingDue বাদ দাও (originalDue নয়)
+  // কারণ: আংশিক পেমেন্ট হলে totalDue ইতোমধ্যে কমেছে; শুধু বাকি অংশটুকুই বাদ দেওয়া সঠিক
+  const deductAmt = (e.remainingDue !== undefined) ? e.remainingDue : amount;
   db.ref(`${CB}/entries/${key}/${eid}`).remove();
-  db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)-amount)));
+  db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)-deductAmt)));
   db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
-  // ══ POS মেমো সমন্বয়: sale এন্ট্রি হলে মেমোর due ০ করো ══
+
+  // ══ sale এন্ট্রি: মূল মেমোর due ০ করো, Firebase + Sheet আপডেট ══
   if(e.type==='sale'&&e.memoId){
     db.ref('invoices/'+e.memoId).transaction(cur=>{
       if(!cur)return cur;
-      return {...cur,due:0,paid:Math.round((cur.total||0))};
+      return {...cur, due:0};
     });
+    // Sheet-এ মেমো ডিলিট করো (পুরনো ডেটা সরাও)
+    fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:e.memoId}})}).catch(()=>{});
   }
-  // ══ ম্যানুয়াল এন্ট্রি হলে: invoice ডিলিট + daily_credit_entries আপডেট ══
+
+  // ══ manual এন্ট্রি: invoice Firebase + Sheet উভয় থেকে ডিলিট ══
   if(e.type==='manual'){
     if(e.invoiceId){
-      db.ref('invoices/'+e.invoiceId).remove(); // Firebase থেকে মুছো
-      // ══ Sheet থেকেও মুছো ══
+      db.ref('invoices/'+e.invoiceId).remove();
       fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:e.invoiceId}})}).catch(()=>{});
     }
-    if(entDate) db.ref(`${CB}/daily_credit_entries/${entDate}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)-amount)),lastUpdate:Date.now()}));
+    // ✅ Fix: daily_credit_entries থেকেও remainingDue বাদ দাও
+    if(entDate) db.ref(`${CB}/daily_credit_entries/${entDate}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)-deductAmt)),lastUpdate:Date.now()}));
   }
-  toast('🗑','এন্ট্রি মুছেছে',`${famt(amount)} বাদ দেওয়া হয়েছে`);
+
+  toast('🗑','এন্ট্রি মুছেছে',`${famt(deductAmt)} বাদ দেওয়া হয়েছে`);
   setTimeout(()=>renderDet(key),300);
 }
 
@@ -700,14 +708,35 @@ function delPayment(pk,key,amount){
         if(!ap.memoId || !(ap.amount>0)) return;
         db.ref(`${CB}/entries/${key}/${ap.memoId}`).transaction(cur => {
           if(!cur) return cur;
+          // ✅ Fix Bug#4: originalDue missing হলে newRem সর্বদা ০ হতো
+          // safeCap: originalDue থাকলে সেটা, নইলে বর্তমান remainingDue + ap.amount (ফেরতের সর্বোচ্চ)
+          const safeCap = (cur.originalDue > 0) ? cur.originalDue : Math.round((cur.remainingDue||0) + ap.amount);
           const newRem = Math.min(
             Math.round((cur.remainingDue||0) + ap.amount),
-            cur.originalDue||0   // originalDue-এর বেশি হতে পারবে না
+            safeCap
           );
-          // status: পুরো বাকি থাকলে 'due', আংশিক থাকলে 'partial'
-          const newStatus = newRem >= (cur.originalDue||0) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
+          const newStatus = newRem >= (cur.originalDue||safeCap) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
           return {...cur, remainingDue: newRem, status: newStatus};
         });
+        // ✅ Fix: পেমেন্ট ডিলিট হলে মূল POS sale invoice-এর paid/due পূর্বাবস্থায় ফেরাও
+        const entData=(AE[key]||{})[ap.memoId]||{};
+        if(entData.type==='sale'&&entData.memoId){
+          db.ref('invoices/'+entData.memoId).transaction(cur=>{
+            if(!cur)return cur;
+            const newPaid=Math.max(0,Math.round((cur.paid||0)-ap.amount));
+            const newDue =Math.min(Math.round((cur.due||0)+ap.amount),cur.total||0);
+            return {...cur,paid:newPaid,due:newDue};
+          });
+        }
+        // ✅ Fix: পেমেন্ট ডিলিট হলে manual বাকি এন্ট্রির invoice-এও paid/due পূর্বাবস্থায় ফেরাও
+        if(entData.type==='manual'&&entData.invoiceId){
+          db.ref('invoices/'+entData.invoiceId).transaction(cur=>{
+            if(!cur)return cur;
+            const newPaid=Math.max(0,Math.round((cur.paid||0)-ap.amount));
+            const newDue =Math.min(Math.round((cur.due||0)+ap.amount),cur.total||0);
+            return {...cur,paid:newPaid,due:newDue};
+          });
+        }
       });
     }
     toast('🗑','পেমেন্ট মুছেছে',`${famt(amount)} বাকিতে ফেরত গেছে`);
@@ -742,7 +771,9 @@ function saveEditEnt(){
   const paid=Math.max(0,oldOrig-oldRem);
   const newRem=Math.max(0,newDue-paid);
   const diff=newDue-oldOrig; // কত বাড়লো/কমলো
-  db.ref(`${CB}/entries/${key}/${eid}`).update({date:dt,originalDue:newDue,remainingDue:newRem,note:note||e.note,status:newRem<=0?'cleared':'due'});
+  db.ref(`${CB}/entries/${key}/${eid}`).update({date:dt,originalDue:newDue,remainingDue:newRem,note:note||e.note,
+    // ✅ Fix Bug#3: 'partial' status যোগ করা হলো — আংশিক পেমেন্টে সঠিক দেখাবে
+    status:newRem<=0?'cleared':newRem<newDue?'partial':'due'});
   db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)+diff)));
   db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
   // ══ POS মেমো সমন্বয়: sale এন্ট্রি হলে মেমোর due আপডেট করো ══
@@ -771,7 +802,8 @@ function saveEditEnt(){
     } else {
       // তারিখ বদলেছে: পুরনো তারিখ থেকে বাদ, নতুন তারিখে যোগ
       db.ref(`${CB}/daily_credit_entries/${oldDate}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)-oldOrig)),lastUpdate:Date.now()}));
-      db.ref(`${CB}/daily_credit_entries/${dt}`).transaction(cur=>({total:Math.round(((cur&&cur.total)||0)+newDue),lastUpdate:Date.now()}));
+      // ✅ Fix Bug#8: নতুন তারিখেও Math.max(0,...) guard যোগ করা হলো
+      db.ref(`${CB}/daily_credit_entries/${dt}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)+newDue)),lastUpdate:Date.now()}));
     }
   }
   cm('m-editent');
@@ -889,7 +921,31 @@ function confPay(){
   const amt=parseFloat(document.getElementById('payamt').value)||0;if(amt<=0||!_fd.length){toast('⚠️','পরিমাণ দিন','','warn');return;}
   const note=document.getElementById('paynote').value.trim()||'নগদ পেমেন্ট',today=gtd(),key=curKey,c=AC[key]||{};
   let totAp=0;const apTo=[];
-  _fd.forEach(r=>{totAp+=r.ap;apTo.push({memoId:r.eid,date:r.date,amount:r.ap});const ns=r.af<=0?'cleared':'partial';db.ref(`${CB}/entries/${key}/${r.eid}`).update({remainingDue:Math.max(0,r.af),status:ns});});
+  _fd.forEach(r=>{
+    totAp+=r.ap;
+    apTo.push({memoId:r.eid,date:r.date,amount:r.ap});
+    const ns=r.af<=0?'cleared':'partial';
+    db.ref(`${CB}/entries/${key}/${r.eid}`).update({remainingDue:Math.max(0,r.af),status:ns});
+    // ✅ Fix: মূল POS sale invoice-এর paid/due আপডেট করো
+    const entData=(AE[key]||{})[r.eid]||{};
+    if(entData.type==='sale'&&entData.memoId){
+      db.ref('invoices/'+entData.memoId).transaction(cur=>{
+        if(!cur)return cur;
+        const newPaid=Math.round((cur.paid||0)+r.ap);
+        const newDue =Math.max(0,Math.round((cur.due||0)-r.ap));
+        return {...cur,paid:newPaid,due:newDue};
+      });
+    }
+    // ✅ Fix: manual বাকি এন্ট্রির invoice-এও paid/due আপডেট করো
+    if(entData.type==='manual'&&entData.invoiceId){
+      db.ref('invoices/'+entData.invoiceId).transaction(cur=>{
+        if(!cur)return cur;
+        const newPaid=Math.round((cur.paid||0)+r.ap);
+        const newDue =Math.max(0,Math.round((cur.due||0)-r.ap));
+        return {...cur,paid:newPaid,due:newDue};
+      });
+    }
+  });
   db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)-totAp)));
   db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
 
@@ -900,29 +956,37 @@ function confPay(){
 
     // ══ Payment receipt HTML তৈরি ══
     const bdDate = fdate(today);
-    const appliedRows = apTo.map(a => `<tr><td>#${a.memoId}</td><td align="right">${a.amount}/-</td></tr>`).join('');
+    const prevDue  = Math.round(c.totalDue||0);
+    const afterDue = Math.max(0, prevDue - totAp);
     const payHtml = `<div style="width:58mm;font-family:'Arial',sans-serif;font-size:12px;padding:5px;background:white;color:#000;">
       <center>
         <b style="font-size:16px;">হাজী মোদাচ্ছের ক্লথ স্টোর</b><br>
         <span style="font-size:10px;">সন্দীপ কমপ্লেক্স, চট্টগ্রাম | ০১৭০৯-৩৪২০১৮</span>
         <div style="border-top:1px dashed #000;margin:5px 0;"></div>
-        <b style="font-size:13px;color:green;">💚 বাকি আদায় রশিদ</b>
+        <b style="font-size:14px;">*** বাকি আদায় রশিদ ***</b>
       </center>
-      <table width="100%" style="font-size:11px;margin:5px 0;">
-        <tr><td>রশিদ: <b>#${newId}</b></td><td align="right">তারিখ: ${bdDate}</td></tr>
-        <tr><td colspan="2">গ্রাহক: <b>${c.name||''}</b>${c.phone?' ('+c.phone+')':''}</td></tr>
-        <tr><td colspan="2">নোট: ${note}</td></tr>
-      </table>
       <div style="border-top:1px dashed #000;margin:5px 0;"></div>
-      <table width="100%" style="font-size:11px;">
-        <tr style="font-weight:bold;border-bottom:1px solid #000;"><td>বাকির রশিদ</td><td align="right">পরিমাণ</td></tr>
-        ${appliedRows}
+      <table width="100%" style="font-size:11px;margin:4px 0;">
+        <tr><td>রশিদ:</td><td align="right"><b>#${newId}</b></td></tr>
+        <tr><td>তারিখ:</td><td align="right">${bdDate}</td></tr>
+        <tr><td>গ্রাহক:</td><td align="right"><b>${c.name||''}</b></td></tr>
+        ${c.phone?`<tr><td>মোবাইল:</td><td align="right">${c.phone}</td></tr>`:''}
+        ${note&&note!=='নগদ পেমেন্ট'?`<tr><td>নোট:</td><td align="right">${note}</td></tr>`:''}
       </table>
-      <div style="border-top:1px dashed #000;margin:5px 0;"></div>
-      <table width="100%" style="font-size:13px;font-weight:bold;">
-        <tr style="font-size:15px;"><td>মোট আদায়:</td><td align="right" style="color:green;">${totAp}/-</td></tr>
+      <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+      <table width="100%" style="font-size:13px;">
+        <tr><td>আগের মোট বাকি:</td><td align="right">${prevDue}/-</td></tr>
+        <tr><td>পরিশোধ করেছেন:</td><td align="right" style="font-weight:bold;">(−) ${totAp}/-</td></tr>
       </table>
-      <center style="font-size:10px;margin-top:8px;">ধন্যবাদ, আবার আসবেন!</center>
+      <div style="border-top:2px solid #000;margin:5px 0;"></div>
+      <table width="100%" style="font-size:15px;font-weight:bold;">
+        <tr>
+          <td>বর্তমান বাকি:</td>
+          <td align="right">${afterDue}/-</td>
+        </tr>
+      </table>
+      <div style="border-top:1px dashed #000;margin:6px 0;"></div>
+      <center style="font-size:10px;">ধন্যবাদ, আবার আসবেন!</center>
     </div>`;
 
     const pd={
@@ -944,21 +1008,24 @@ function confPay(){
 
     // ══ invoices/-এ HTML সহ সেভ (source:'payment_baki' → রিপোর্টে বিক্রয় হিসেবে গণনা হবে না) ══
     const payInvoiceDoc={
-      id:       newId,
-      memoRef:  String(newId),
-      name:     c.name||'',
-      phone:    c.phone||'',
-      date:     today,
-      subTotal: totAp,
-      discAmt:  0,
-      total:    totAp,
-      paid:     totAp,
-      due:      0,
-      items:    [{name: note||'বাকি পরিশোধ', qty:1, price:totAp, id:''}],
-      seller:   'বাকি খাতা',
-      source:   'payment_baki',
-      custKey:  key,
-      createdAt: Date.now()
+      id:             newId,
+      memoRef:        String(newId),
+      name:           c.name||'',
+      phone:          c.phone||'',
+      date:           today,
+      subTotal:       totAp,
+      discAmt:        0,
+      total:          totAp,
+      paid:           totAp,
+      due:            0,
+      items:          [{name: note||'বাকি পরিশোধ', qty:1, price:totAp, id:''}],
+      seller:         'বাকি খাতা',
+      source:         'payment_baki',
+      custKey:        key,
+      previousDue:    prevDue,
+      afterDue:       afterDue,
+      appliedDetails: _fd.map(r=>({date:r.date,bf:r.bf,ap:r.ap,af:r.af})),
+      createdAt:      Date.now()
     };
     db.ref('invoices/'+newId).set(payInvoiceDoc); // Firebase — html ছাড়া ✅
     bkSendToMainSheet({...payInvoiceDoc, html: payHtml}); // Sheet — html সহ ✅
