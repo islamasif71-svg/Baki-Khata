@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v53 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v54 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -974,15 +974,18 @@ function confPay(){
         ${note&&note!=='নগদ পেমেন্ট'?`<tr><td>নোট:</td><td align="right">${note}</td></tr>`:''}
       </table>
       <div style="border-top:1px dashed #000;margin:6px 0;"></div>
-      <table width="100%" style="font-size:13px;">
-        <tr><td>আগের মোট বাকি:</td><td align="right">${prevDue}/-</td></tr>
-        <tr><td>পরিশোধ করেছেন:</td><td align="right" style="font-weight:bold;">(−) ${totAp}/-</td></tr>
-      </table>
-      <div style="border-top:2px solid #000;margin:5px 0;"></div>
-      <table width="100%" style="font-size:15px;font-weight:bold;">
+      <table width="100%" style="font-size:13px;border-collapse:collapse;">
         <tr>
-          <td>বর্তমান বাকি:</td>
-          <td align="right">${afterDue}/-</td>
+          <td style="padding:3px 0;">আগের মোট বাকি:</td>
+          <td align="right" style="padding:3px 0;">${prevDue}/-</td>
+        </tr>
+        <tr>
+          <td style="padding:3px 0;">পরিশোধ করেছেন:</td>
+          <td align="right" style="padding:3px 0;font-weight:bold;">(−) ${totAp}/-</td>
+        </tr>
+        <tr style="border-top:2px solid #000;font-size:15px;font-weight:bold;">
+          <td style="padding:5px 0 3px;">বর্তমান বাকি পাওনা:</td>
+          <td align="right" style="padding:5px 0 3px;">${afterDue}/-</td>
         </tr>
       </table>
       <div style="border-top:1px dashed #000;margin:6px 0;"></div>
