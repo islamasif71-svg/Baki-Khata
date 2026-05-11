@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v54 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v46 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -1028,6 +1028,7 @@ function confPay(){
       previousDue:    prevDue,
       afterDue:       afterDue,
       appliedDetails: _fd.map(r=>({date:r.date,bf:r.bf,ap:r.ap,af:r.af})),
+      appliedTo:      apTo,
       createdAt:      Date.now()
     };
     db.ref('invoices/'+newId).set(payInvoiceDoc); // Firebase — html ছাড়া ✅
