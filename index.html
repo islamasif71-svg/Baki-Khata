@@ -87,6 +87,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:#2c3e50;
 .sd{background:#ffebee;color:#c62828;}
 .sp{background:#fff3e0;color:#e65100;}
 .sc2{background:#e8f5e9;color:#2e7d32;}
+.sr{background:#fff8e1;color:#e65100;}
 .so{background:#fff3e0;color:#e65100;}
 @media(max-width:520px){.ltbl th:nth-child(5),.ltbl td:nth-child(5){display:none;}}
 @media(max-width:400px){.ltbl th:nth-child(3),.ltbl td:nth-child(3){display:none;}}
@@ -554,7 +555,7 @@ function renderDet(key){
     if(!Object.keys(ent).length && AE[key] && Object.keys(AE[key]).length) ent=AE[key];
     if(Object.keys(ent).length) AE[key]=ent; // cache আপডেট
     const pays=paySnap.val()||{},lines=[];
-    Object.entries(ent).forEach(([ek,e])=>{ if(e.status==='cancelled') return; const ec={...e,_fbKey:ek}; lines.push({date:e.date,ts:e.createdAt||0,type:e.type==='opening'?'opening':'due',amount:e.originalDue||e.remainingDue||0,note:e.note||'কেনাকাটা',ref:e.memoRef||e.memoId||'—',entry:ec});});
+    Object.entries(ent).forEach(([ek,e])=>{ if(e.status==='cancelled') return; const ec={...e,_fbKey:ek}; lines.push({date:e.date,ts:e.createdAt||0,type:e.type==='opening'?'opening':e.type==='return'?'return':'due',amount:e.type==='return'?Math.abs(e.originalDue||e.remainingDue||0):(e.originalDue||e.remainingDue||0),note:e.note||'কেনাকাটা',ref:e.memoRef||e.memoId||'—',entry:ec});});
     Object.entries(pays).forEach(([pk,p])=>{lines.push({date:p.date,ts:p.receivedAt||0,type:'pay',amount:p.amount||0,note:p.note||'নগদ পেমেন্ট',ref:p.fromMemoId||'—',pay:p,payKey:pk});});
     lines.sort((a,b)=>a.date!==b.date?(a.date<b.date?-1:1):(a.ts||0)-(b.ts||0));
     curEnt=lines.filter(l=>l.type!=='pay');
@@ -568,10 +569,11 @@ function renderDet(key){
       let typeLbl,typeClass,rowCls='';
       if(ln.type==='opening'){runBal+=ln.amount;tDue+=ln.amount;typeLbl='🟡 প্রারম্ভিক';typeClass='so';rowCls='dr';}
       else if(ln.type==='due'){runBal+=ln.amount;tDue+=ln.amount;typeLbl='🔴 বাকি';typeClass='sd';rowCls='dr';}
+      else if(ln.type==='return'){runBal-=ln.amount;tPaid+=ln.amount;typeLbl='🔄 মাল ফেরত';typeClass='sr';rowCls='pr';}
       else{runBal-=ln.amount;tPaid+=ln.amount;typeLbl='✅ জমা';typeClass='sc2';rowCls='pr';}
       const balHtml=runBal===0?'<span style="color:#888;">০/-</span>':runBal>0?`<span class="lbr">${famt(runBal)}</span>`:`<span class="lbg">+ফেরত ${famt(-runBal)}</span>`;
       const dc=(ln.type==='due'||ln.type==='opening')?`<span class="lr">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
-      const pc=ln.type==='pay'?`<span class="lg">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
+      const pc=ln.type==='pay'?`<span class="lg">${famt(ln.amount)}</span>`:ln.type==='return'?`<span style="color:#e65100;">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
       const _eid=String(ln.entry?.memoId||ln.entry?._fbKey||'').replace(/'/g,"\\'");
       const adminEnt=(isAdmin&&ln.type!=='pay'&&_eid)?`<button class="edbtn" onclick="openEditEnt('${_eid}','${key.replace(/'/g,"\\'")}')">✏️ এডিট</button> <button class="delbtn" onclick="delEntry('${_eid}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
       const adminPay=(isAdmin&&ln.type==='pay'&&ln.payKey)?`<button class="delbtn" onclick="delPayment('${ln.payKey}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
@@ -606,6 +608,7 @@ function renderPayH(key){
 function viewEnt(ln){
   const e=ln.entry||ln.pay||ln;let h=`<div style="font-size:11px;border:1px solid #ddd;border-radius:7px;padding:10px;"><center><b>হাজী মোদাচ্ছের ক্লথ স্টোর</b></center><hr style="margin:5px 0;border-style:dashed;"><table width="100%" style="font-size:11px;">`;
   if(ln.type==='pay'){h+=`<tr><td>ধরন:</td><td align="right"><b>💚 পেমেন্ট</b></td></tr><tr><td>তারিখ:</td><td align="right">${fdate(ln.date)}</td></tr><tr><td>পরিমাণ:</td><td align="right" style="font-size:15px;font-weight:800;color:green;">${famt(ln.amount)}</td></tr><tr><td>নোট:</td><td align="right">${ln.note||'নগদ'}</td></tr>`;if(ln.pay?.appliedTo){h+=`<tr><td colspan="2"><hr style="border-style:dashed;margin:4px 0;"></td></tr><tr><td colspan="2" style="font-weight:700;">বরাদ্দ:</td></tr>`;(ln.pay.appliedTo||[]).forEach(a=>{h+=`<tr><td>#${a.memoId} (${fdate(a.date)})</td><td align="right">${famt(a.amount)}</td></tr>`;});}}
+  else if(ln.type==='return'){h+=`<tr><td>ধরন:</td><td align="right"><b>🔄 মাল ফেরত</b></td></tr><tr><td>তারিখ:</td><td align="right">${fdate(ln.date)}</td></tr><tr><td>রশিদ/মেমো:</td><td align="right">#${ln.ref||'—'}</td></tr><tr><td>ফেরত পরিমাণ:</td><td align="right" style="font-size:15px;font-weight:800;color:#e65100;">${famt(ln.amount)}</td></tr><tr><td>নোট:</td><td align="right">${ln.note||'মাল ফেরত'}</td></tr>`;}
   else{h+=`<tr><td>ধরন:</td><td align="right"><b>${ln.type==='opening'?'🟡 প্রারম্ভিক':'🔴 বাকি'}</b></td></tr><tr><td>তারিখ:</td><td align="right">${fdate(ln.date)}</td></tr><tr><td>রশিদ:</td><td align="right">#${ln.ref||'—'}</td></tr><tr><td>মোট বিল:</td><td align="right">${famt(e.total||0)}</td></tr><tr><td>মূল বাকি:</td><td align="right" style="color:red;">${famt(e.originalDue||ln.amount)}</td></tr><tr><td>বর্তমান বাকি:</td><td align="right" style="color:${(e.remainingDue||0)>0?'red':'green'};font-weight:800;">${famt(e.remainingDue||0)}</td></tr><tr><td>নোট:</td><td align="right">${ln.note||'—'}</td></tr>`;if(e.items&&e.items.length){h+=`<tr><td colspan="2"><hr style="border-style:dashed;margin:4px 0;"></td></tr>`;e.items.forEach(it=>{h+=`<tr><td>${it.name}</td><td align="right">${it.qty}×${it.price}=${Math.round(it.qty*it.price)}/-</td></tr>`;});}}
   h+='</table></div>';
   document.getElementById('viewcont').innerHTML=h;
