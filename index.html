@@ -193,9 +193,56 @@ body.dm .dinfo h2{color:#ddd;}
 .wa-recip{background:#e2fce8;border:1px solid #a5d6a7;border-radius:7px;padding:8px 11px;font-size:12px;color:#1b5e20;margin-bottom:10px;}
 .wa-textarea{width:100%;padding:10px;border:1.5px solid #ccc;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;min-height:240px;line-height:1.6;}
 .wa-textarea:focus{border-color:#25D366;}
+
+        /* ══ Maincode-এর মতো bkBar + bkToast ══ */
+        #bk-toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:99999;}
+        .bk-toast{background:#1a2535;border:1px solid #2a3a50;border-radius:12px;padding:12px 15px;display:flex;align-items:center;gap:10px;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.4);animation:tkIn 0.4s cubic-bezier(0.34,1.56,0.64,1);position:relative;overflow:hidden;}
+        .bk-toast::after{content:"";position:absolute;bottom:0;left:0;height:3px;width:100%;background:#00e676;animation:tkShrink 3s linear forwards;}
+        .bk-toast.reading::after{background:#40c4ff;}
+        .bk-toast.error::after{background:#ff5252;}
+        @keyframes tkIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes tkOut{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}
+        @keyframes tkShrink{from{width:100%}to{width:0%}}
+        .bk-ti{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,230,118,0.12);flex-shrink:0;}
+        .bk-toast.reading .bk-ti{background:rgba(64,196,255,0.12);}
+        .bk-toast.error .bk-ti{background:rgba(255,82,82,0.12);}
+        .bk-tb h6{font-size:12px;font-weight:700;color:#e0e8f0;margin:0 0 2px 0;}
+        .bk-tb p{font-size:11px;color:#6b8099;margin:0;}
+        /* bkBar */
+        #bkBar{background:#1a2535;border-radius:12px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid #2a3a50;box-shadow:0 4px 15px rgba(0,0,0,0.2);position:relative;overflow:hidden;margin:8px 12px;}
+        #bkBar::before{content:"";position:absolute;top:0;left:0;width:4px;height:100%;background:#00e676;transition:background 0.4s;}
+        #bkBar.saving::before{background:#ffd600;}
+        #bkBar.error::before{background:#ff5252;}
+        #bkBar.reading::before{background:#40c4ff;}
+        #bkBar.pending::before{background:#ff9800;}
+        .bk-left{display:flex;align-items:center;gap:10px;}
+        .bk-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.25);flex-shrink:0;transition:all 0.4s;}
+        #bkBar.saving .bk-ico{background:rgba(255,214,0,0.12);border-color:rgba(255,214,0,0.25);animation:bkpls 1s infinite;}
+        #bkBar.reading .bk-ico{background:rgba(64,196,255,0.12);border-color:rgba(64,196,255,0.25);}
+        #bkBar.error .bk-ico{background:rgba(255,82,82,0.12);border-color:rgba(255,82,82,0.25);}
+        #bkBar.pending .bk-ico{background:rgba(255,152,0,0.12);border-color:rgba(255,152,0,0.25);}
+        @keyframes bkpls{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+        .bk-txt h5{font-size:13px;font-weight:700;color:#e0e8f0;margin:0 0 2px 0;}
+        .bk-txt p{font-size:11px;color:#6b8099;margin:0;}
+        .bk-bdg{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,230,118,0.15);color:#00e676;border:1px solid rgba(0,230,118,0.3);white-space:nowrap;transition:all 0.4s;}
+        #bkBar.saving .bk-bdg{background:rgba(255,214,0,0.15);color:#ffd600;border-color:rgba(255,214,0,0.3);}
+        #bkBar.reading .bk-bdg{background:rgba(64,196,255,0.15);color:#40c4ff;border-color:rgba(64,196,255,0.3);}
+        #bkBar.error .bk-bdg{background:rgba(255,82,82,0.15);color:#ff5252;border-color:rgba(255,82,82,0.3);}
+        #bkBar.pending .bk-bdg{background:rgba(255,152,0,0.15);color:#ff9800;border-color:rgba(255,152,0,0.3);}
 </style>
 </head>
 <body>
+  <div id="bkBar" style="display:none;">
+    <div class="bk-left">
+      <div class="bk-ico" id="bkIco">☁️</div>
+      <div class="bk-txt">
+        <h5 id="bkTitle">ব্যাকআপ সিস্টেম সক্রিয়</h5>
+        <p id="bkDesc">সর্বশেষ ব্যাকআপ: এখনো হয়নি</p>
+      </div>
+    </div>
+    <div class="bk-bdg" id="bkBdg">প্রস্তুত</div>
+  </div>
+  <div id="bk-toasts"></div>
 
 <div id="pinov">
   <div class="pinbox">
@@ -240,7 +287,7 @@ body.dm .dinfo h2{color:#ddd;}
 <!-- Ledger Tab -->
 <div class="tab-pane active" id="pane-ledger">
   <div class="top-controls">
-    <div class="srch"><span>🔍</span><input type="text" id="lsrch" placeholder="নাম বা মোবাইল..." oninput="filterC(this.value)"></div>
+    <div class="srch"><span>🔍</span><input type="text" id="lsrch" placeholder="নাম, মোবাইল বা মেমো নম্বর..." oninput="filterC(this.value)"></div>
     <button class="btn-a bg" id="addCBtn" onclick="openAddC()">➕ নতুন গ্রাহক</button>
   </div>
   <div class="alpha-bar" id="abar"><button class="ab all active" onclick="setA('all')">সব</button></div>
@@ -457,7 +504,11 @@ window.addEventListener('load',()=>{
 
   setTimeout(()=>{if(Object.keys(AC).length===0)loadSheetFallback();},4000);
   db.ref(`${CB}/daily_receipts/${gtd()}`).on('value',s=>{const d=s.val();document.getElementById('st3').textContent=famt(d?d.total:0);});
-  window.addEventListener('online',()=>document.getElementById('netbar').style.display='none');
+  window.addEventListener('online',()=>{
+  document.getElementById('netbar').style.display='none';
+  bkToast('','🌐','Internet সংযোগ পাওয়া গেছে','Pending ব্যাকআপ পাঠানো হচ্ছে...');
+  setTimeout(bkSendPending, 1000);
+});
   window.addEventListener('offline',()=>document.getElementById('netbar').style.display='block');
   if(!navigator.onLine)document.getElementById('netbar').style.display='block';
   if(localStorage.getItem('bk_dm')==='1'){document.body.classList.add('dm');document.getElementById('dtog').textContent='☀️';}
@@ -506,7 +557,91 @@ function renderCList(q='',al='all'){
   });
   grid.innerHTML=h;
 }
-function filterC(q){renderCList(q,alpha);}
+function filterC(q){
+  // ✅ মেমো নম্বর সার্চ: শুধু সংখ্যা টাইপ করলে মেমো খোঁজো
+  if(/^\d+$/.test((q||'').trim())) { searchByMemo(q.trim()); return; }
+  renderCList(q,alpha);
+}
+
+/* ═══════ মেমো নম্বর সার্চ ═══════ */
+function searchByMemo(memoNum){
+  const grid=document.getElementById('cgrid');
+  grid.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>মেমো #${memoNum} খোঁজা হচ্ছে...</p></div>`;
+
+  // প্রথমে AE cache চেক করো (দ্রুত)
+  const cached=_findInCache(memoNum);
+  if(cached.length){ showMemoResults(cached,memoNum); return; }
+
+  // ✅ মূল invoices/ থেকে সরাসরি খোঁজো — সব মেমো এখানে আছে (নগদ+বাকি)
+  db.ref('invoices/'+memoNum).once('value',invSnap=>{
+    const inv=invSnap.val();
+    if(inv){
+      const custKey=inv.custKey||(inv.name&&inv.name!=='নগদ'?makeCustKey(inv.name):null);
+      const cust=AC[custKey]||{name:inv.name||'—',phone:inv.phone||'',totalDue:0};
+      showMemoResults([{key:custKey,cust,entry:{
+        memoId:inv.id, memoRef:String(inv.id),
+        date:inv.date, originalDue:inv.total||0,
+        type:'invoice', paid:inv.paid||0, due:inv.due||0,
+        custName:inv.name, custPhone:inv.phone||''
+      }}],memoNum);
+      return;
+    }
+    // invoices/ তে নেই — entries/ এ খোঁজো (manual/return entry)
+    db.ref(`${CB}/entries`).once('value',snap=>{
+      const all=snap.val()||{};
+      const res=[];
+      Object.entries(all).forEach(([custKey,entries])=>{
+        Object.entries(entries||{}).forEach(([ek,e])=>{
+          if(!e) return;
+          if(String(e.memoId)===memoNum||String(e.memoRef)===memoNum){
+            if(!res.find(r=>r.key===custKey))
+              res.push({key:custKey,cust:AC[custKey]||{name:e.custName||'—',phone:e.custPhone||''},entry:e});
+          }
+        });
+      });
+      showMemoResults(res,memoNum);
+    });
+  });
+}
+
+function _findInCache(memoNum){
+  const res=[];
+  Object.entries(AE).forEach(([custKey,entries])=>{
+    Object.entries(entries||{}).forEach(([ek,e])=>{
+      if(!e) return;
+      if(String(e.memoId)===memoNum||String(e.memoRef)===memoNum){
+        if(!res.find(r=>r.key===custKey)) res.push({key:custKey,cust:AC[custKey]||{name:e.custName||'—',phone:e.custPhone||''},entry:e});
+      }
+    });
+  });
+  return res;
+}
+
+function showMemoResults(found,memoNum){
+  const grid=document.getElementById('cgrid');
+  if(!found.length){
+    grid.innerHTML=`<div class="empty"><div class="ei">😔</div><p>মেমো #${memoNum} পাওয়া যায়নি</p></div>`;
+    return;
+  }
+  let h=`<div style="padding:8px 12px;font-size:11px;color:#888;background:#f8f9fa;border-radius:8px;margin-bottom:6px;">📄 মেমো #${memoNum} — ${found.length}টি ফলাফল</div>`;
+  found.forEach(({key,cust,entry})=>{
+    const due=cust.totalDue||0,bc=due>5000?'bh':due>1000?'bm':due>0?'bl':'bz';
+    const typeLbl=entry.type==='return'?'🔄 মাল ফেরত':entry.type==='invoice'?'🧾 মেমো':entry.type==='sale'?'🔴 বাকি':'📝 এন্ট্রি';
+    const amtShow=entry.type==='invoice'?`মোট: ${famt(entry.originalDue||0)} | নগদ: ${famt(entry.paid||0)} | বাকি: ${famt(entry.due||0)}`:`${famt(Math.abs(entry.originalDue||0))}`;
+    h+=`<div class="cc" onclick="openCust('${key}')">
+      <div class="ci">
+        <h3>👤 ${cust.name||'—'}</h3>
+        <p>📞 ${cust.phone||'নম্বর নেই'}</p>
+        <p style="font-size:10px;color:#e65100;margin-top:3px;">${typeLbl} | ${fdate(entry.date)} | ${amtShow}</p>
+      </div>
+      <div class="cdue" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+        <span class="da">${famt(due)}</span>
+        <span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span>
+      </div>
+    </div>`;
+  });
+  grid.innerHTML=h;
+}
 
 /* ═══════ HISTORY TAB ═══════ */
 function srchHist(q){
@@ -574,7 +709,8 @@ function renderDet(key){
       const balHtml=runBal===0?'<span style="color:#888;">০/-</span>':runBal>0?`<span class="lbr">${famt(runBal)}</span>`:`<span class="lbg">+ফেরত ${famt(-runBal)}</span>`;
       const dc=(ln.type==='due'||ln.type==='opening')?`<span class="lr">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
       const pc=ln.type==='pay'?`<span class="lg">${famt(ln.amount)}</span>`:ln.type==='return'?`<span style="color:#e65100;">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
-      const _eid=String(ln.entry?.memoId||ln.entry?._fbKey||'').replace(/'/g,"\\'");
+      // ✅ FIX: _fbKey আগে নাও — return entry Firebase key="ret_123", memoId="123"
+      const _eid=String(ln.entry?._fbKey||ln.entry?.memoId||'').replace(/'/g,"\\'");
       const adminEnt=(isAdmin&&ln.type!=='pay'&&_eid)?`<button class="edbtn" onclick="openEditEnt('${_eid}','${key.replace(/'/g,"\\'")}')">✏️ এডিট</button> <button class="delbtn" onclick="delEntry('${_eid}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
       const adminPay=(isAdmin&&ln.type==='pay'&&ln.payKey)?`<button class="delbtn" onclick="delPayment('${ln.payKey}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
       const noteCell=`${(ln.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}<br><span style="font-size:9px;color:#aaa;">#${ln.ref}</span><br><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;"><button class="vbtn" onclick="viewEnt(window._lLines['${lid}'])">👁 দেখুন</button>${adminEnt}${adminPay}</div>`;
@@ -650,40 +786,175 @@ function delCust(){
 }
 
 /* ═══════ DELETE ENTRY ═══════ */
-function delEntry(eid,key,amount){
-  if(!eid||!key)return;
-  if(!confirm(`এই এন্ট্রিটি (${famt(amount)}) ডিলিট হবে!\n\nগ্রাহকের মোট বাকি থেকে এই পরিমাণ বাদ যাবে।`))return;
-  const e=(AE[key]||{})[eid]||{};
-  const entDate=e.date||null;
-  // ✅ Fix: totalDue থেকে remainingDue বাদ দাও (originalDue নয়)
-  // কারণ: আংশিক পেমেন্ট হলে totalDue ইতোমধ্যে কমেছে; শুধু বাকি অংশটুকুই বাদ দেওয়া সঠিক
-  const deductAmt = (e.remainingDue !== undefined) ? e.remainingDue : amount;
-  db.ref(`${CB}/entries/${key}/${eid}`).remove();
-  db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)-deductAmt)));
-  db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+function delEntry(eid, key, amount){
+  if(!eid || !key) return;
+  const e = (AE[key]||{})[eid] || {};
 
-  // ══ sale এন্ট্রি: মূল মেমোর due ০ করো, Firebase + Sheet আপডেট ══
-  if(e.type==='sale'&&e.memoId){
-    db.ref('invoices/'+e.memoId).transaction(cur=>{
-      if(!cur)return cur;
-      return {...cur, due:0};
-    });
-    // Sheet-এ মেমো ডিলিট করো (পুরনো ডেটা সরাও)
-    fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:e.memoId}})}).catch(()=>{});
-  }
+  // ── মেমো ID বের করো (Maincode-এর মতো: sale→memoId, manual→invoiceId, return→memoId) ──
+  const invoiceId = (e.type==='manual') ? (e.invoiceId||null) : (e.memoId||null);
 
-  // ══ manual এন্ট্রি: invoice Firebase + Sheet উভয় থেকে ডিলিট ══
-  if(e.type==='manual'){
-    if(e.invoiceId){
-      db.ref('invoices/'+e.invoiceId).remove();
-      fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:e.invoiceId}})}).catch(()=>{});
+  // ══ মাল ফেরত ══
+  if(e.type === 'return'){
+    const returnAmt = Math.abs(e.total||0) || amount;
+    if(!confirm(`মেমো #${invoiceId||''} (ফেরত) বাতিল করবেন?
+✅ স্টক ফেরত যাবে
+🗑 Firebase ও ব্যাকআপ থেকে মুছে যাবে`)) return;
+
+    if(invoiceId){
+      // Maincode cancelCurrentMemo-এর মতো হুবহু
+      db.ref('invoices/' + invoiceId).once('value', snap => {
+        const inv = snap.val();
+        if(!inv) return;
+        // ① স্টক রিভার্স
+        (inv.items||[]).forEach(item => {
+          const sID = item.sid || item.id;
+          if(!sID) return;
+          const isReturn = (item.name||'').includes('মাল ফেরত');
+          db.ref('inventory/' + sID + '/qty').transaction(cur => {
+            const c = parseFloat(cur)||0;
+            return isReturn ? Math.max(0, c - item.qty) : c + item.qty;
+          }).then(() => { db.ref('inventory_updates/' + sID).set(Date.now()); });
+        });
+        // ② Firebase থেকে ডিলিট
+        db.ref('invoices/' + invoiceId).remove();
+        // ③ Sheet থেকে ডিলিট
+        fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:invoiceId}})}).catch(()=>{});
+        bkToast('','🗑️','Firebase ও Sheet থেকে ডিলিট','মেমো #'+invoiceId+' মুছে গেছে, স্টক ফেরত গেছে');
+      });
     }
-    // ✅ Fix: daily_credit_entries থেকেও remainingDue বাদ দাও
-    if(entDate) db.ref(`${CB}/daily_credit_entries/${entDate}`).transaction(cur=>({total:Math.max(0,Math.round(((cur&&cur.total)||0)-deductAmt)),lastUpdate:Date.now()}));
+
+    // ④ বাকিখাতার entry মুছো
+    db.ref(`${CB}/entries/${key}/${eid}`).remove();
+    // ⑤ totalDue বাড়াও (ফেরত মুছলে বাকি বাড়বে)
+    db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.round((cur||0) + returnAmt));
+    db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+    // ⑥ FIFO রিভার্স: যে পুরনো entries ফেরতের সময় cleared হয়েছিল সেগুলো পূর্বাবস্থায় ফেরাও
+    db.ref(`${CB}/entries/${key}`).orderByChild('date').once('value', snap => {
+      if(!snap.exists()) return;
+      let toRestore = returnAmt;
+      const updates = {};
+      snap.forEach(child => {
+        if(toRestore <= 0) return;
+        const ent = child.val();
+        if(!ent || ent.type==='return' || ent.type==='pay' || ent.type==='opening') return;
+        const origDue = Math.round(ent.originalDue||0);
+        const curRem  = Math.round(ent.remainingDue||0);
+        if(origDue <= 0 || curRem >= origDue) return;
+        const restore = Math.min(origDue - curRem, toRestore);
+        const newRem  = curRem + restore;
+        updates[`${child.key}/remainingDue`] = newRem;
+        updates[`${child.key}/status`] = newRem <= 0 ? 'cleared' : newRem >= origDue ? 'due' : 'partial';
+        toRestore -= restore;
+      });
+      if(Object.keys(updates).length > 0) db.ref(`${CB}/entries/${key}`).update(updates);
+    });
+    toast('🗑','ফেরত মুছেছে', `${famt(returnAmt)} বাকিতে যোগ হয়েছে`, 'err');
+    setTimeout(()=>renderDet(key), 300);
+    return;
   }
 
-  toast('🗑','এন্ট্রি মুছেছে',`${famt(deductAmt)} বাদ দেওয়া হয়েছে`);
-  setTimeout(()=>renderDet(key),300);
+  // ══ sale / manual / opening ══
+  if(!confirm(`মেমো #${invoiceId||''} বাতিল করবেন?
+✅ স্টক ফেরত যাবে
+🗑 Firebase ও ব্যাকআপ থেকে মুছে যাবে`)) return;
+
+  // Maincode cancelCurrentMemo-এর মতো হুবহু
+  if(invoiceId){
+    db.ref('invoices/' + invoiceId).once('value', snap => {
+      const inv = snap.val();
+      if(!inv) return;
+
+      // ① স্টক রিভার্স
+      (inv.items||[]).forEach(item => {
+        const sID = item.sid || item.id;
+        if(!sID) return;
+        const isReturn = (item.name||'').includes('মাল ফেরত');
+        db.ref('inventory/' + sID + '/qty').transaction(cur => {
+          const c = parseFloat(cur)||0;
+          return isReturn ? Math.max(0, c - item.qty) : c + item.qty;
+        }).then(() => { db.ref('inventory_updates/' + sID).set(Date.now()); });
+      });
+
+      // ② Firebase থেকে ডিলিট
+      db.ref('invoices/' + invoiceId).remove();
+
+      // ③ Sheet থেকে ডিলিট
+      fetch(SURL,{method:'POST',body:JSON.stringify({type:'delete_invoice',data:{id:invoiceId}})}).catch(()=>{});
+
+      // ④ payment_baki হলে payment রিভার্স (Maincode-এর মতো)
+      if(inv.source === 'payment_baki' && inv.custKey){
+        const custKey = inv.custKey;
+        db.ref(`${CB}/payments/${custKey}`).orderByChild('invoiceId').equalTo(inv.id).once('value', paySnap => {
+          if(!paySnap.val()) return;
+          Object.entries(paySnap.val()).forEach(([pk, pd]) => {
+            const pAmt = pd.amount||0;
+            db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.round((cur||0) + pAmt));
+            db.ref(`${CB}/customers/${custKey}/lastActivity`).set(Date.now());
+            const payDate = pd.date || gtd();
+            db.ref(`${CB}/daily_receipts/${payDate}/total`).transaction(cur => Math.max(0, Math.round((cur||0) - pAmt)));
+            (pd.appliedTo||[]).forEach(ap => {
+              if(!ap.memoId || !(ap.amount > 0)) return;
+              db.ref(`${CB}/entries/${custKey}/${ap.memoId}`).transaction(cur => {
+                if(!cur) return cur;
+                const safeCap = (cur.originalDue > 0) ? cur.originalDue : Math.round((cur.remainingDue||0) + ap.amount);
+                const newRem = Math.min(Math.round((cur.remainingDue||0) + ap.amount), safeCap);
+                const newStatus = newRem >= (cur.originalDue||safeCap) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
+                return {...cur, remainingDue: newRem, status: newStatus};
+              });
+              db.ref(`${CB}/entries/${custKey}/${ap.memoId}`).once('value', entSnap => {
+                const entData = entSnap.val();
+                if(entData && entData.type==='sale' && entData.memoId){
+                  db.ref('invoices/' + entData.memoId).transaction(cur => {
+                    if(!cur) return cur;
+                    return {...cur, paid: Math.max(0, Math.round((cur.paid||0) - ap.amount)), due: Math.min(Math.round((cur.due||0) + ap.amount), cur.total||0)};
+                  });
+                }
+                if(entData && entData.type==='manual' && entData.invoiceId){
+                  db.ref('invoices/' + entData.invoiceId).transaction(cur => {
+                    if(!cur) return cur;
+                    return {...cur, paid: Math.max(0, Math.round((cur.paid||0) - ap.amount)), due: Math.min(Math.round((cur.due||0) + ap.amount), cur.total||0)};
+                  });
+                }
+              });
+            });
+            db.ref(`${CB}/payments/${custKey}/${pk}`).remove();
+          });
+        });
+      }
+
+      // ⑤ বাকি মেমো: credit_ledger entry বাতিল + totalDue কমাও (Maincode-এর মতো)
+      if(inv.name && inv.name !== 'নগদ' && parseFloat(inv.due) > 0){
+        const custKey = inv.custKey || key;
+        db.ref(`${CB}/entries/${custKey}/${invoiceId}`).once('value', entSnap => {
+          const entData = entSnap.val();
+          const actualRemaining = (entData && 'remainingDue' in entData)
+            ? Math.max(0, parseFloat(entData.remainingDue)||0)
+            : parseFloat(inv.due);
+          db.ref(`${CB}/entries/${custKey}/${invoiceId}/status`).set('cancelled');
+          db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
+          db.ref(`${CB}/customers/${custKey}/lastActivity`).set(Date.now());
+        });
+      }
+    });
+  } else {
+    // invoiceId নেই (opening ইত্যাদি) — শুধু entry মুছো + totalDue কমাও
+    const deductAmt = (e.remainingDue !== undefined) ? e.remainingDue : amount;
+    db.ref(`${CB}/entries/${key}/${eid}`).remove();
+    db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - deductAmt)));
+    db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+  }
+
+  // manual-এর daily_credit_entries আপডেট
+  if(e.type==='manual' && e.date){
+    const deductAmt = (e.remainingDue !== undefined) ? e.remainingDue : amount;
+    db.ref(`${CB}/daily_credit_entries/${e.date}`).transaction(cur => ({
+      total: Math.max(0, Math.round(((cur&&cur.total)||0) - deductAmt)),
+      lastUpdate: Date.now()
+    }));
+  }
+
+  toast('🗑','মেমো বাতিল ও ডিলিট', `মুছে গেছে, স্টক ফেরত গেছে`, 'err');
+  setTimeout(()=>renderDet(key), 300);
 }
 
 /* ═══════ DELETE PAYMENT ═══════ */
@@ -1178,6 +1449,28 @@ function _bkMainSendPending(){
 window.addEventListener('online',()=>_bkMainSendPending());
 
 /* ═══════ BACKUP ═══════ */
+/* ═══ Maincode-এর মতো bkSet + bkToast ═══ */
+function bkSet(type,ico,title,desc,bdg){
+  const bar=document.getElementById('bkBar');
+  bar.style.display='flex';
+  bar.className=type||'';
+  document.getElementById('bkIco').textContent=ico;
+  document.getElementById('bkTitle').textContent=title;
+  document.getElementById('bkDesc').textContent=desc;
+  document.getElementById('bkBdg').textContent=bdg||'';
+}
+function bkToast(type,ico,title,desc){
+  const c=document.getElementById('bk-toasts');
+  const t=document.createElement('div');
+  t.className='bk-toast '+(type||'');
+  t.innerHTML=`<div class="bk-ti">${ico}</div><div class="bk-tb"><h6>${title}</h6><p>${desc}</p></div>`;
+  c.appendChild(t);
+  setTimeout(()=>{t.style.animation='tkOut 0.4s forwards';setTimeout(()=>t.remove(),400);},3000);
+}
+
+const BK_PENDING='bk_pending_q';
+let _bkSending=false;
+
 function bkPush(type,data){
   const log=JSON.parse(localStorage.getItem('bk_log')||'[]');
   log.push({type,time:nowStr(),data:JSON.stringify(data).substring(0,80)});
@@ -1186,24 +1479,25 @@ function bkPush(type,data){
   localStorage.setItem('bk_count',(parseInt(localStorage.getItem('bk_count')||'0')+1).toString());
   sendSheets(type,data);
 }
-function sendSheets(type,data){
+
+function sendSheets(type,data,retry=0){
   document.getElementById('sdot').className='sdot warn';
   document.getElementById('stxt').textContent='ব্যাকআপ হচ্ছে...';
-  const payload = JSON.stringify({source:'baki_khata',type,data,ts:Date.now()});
-  // Google Apps Script → GET দিয়ে পাঠাও (CORS সমস্যা এড়াতে)
-  const encoded = encodeURIComponent(payload);
+  bkSet('saving','⏳','ব্যাকআপ হচ্ছে...','Sheet-এ পাঠানো হচ্ছে','সেভ হচ্ছে...');
+  const payload=JSON.stringify({source:'baki_khata',type,data,ts:Date.now()});
+  const encoded=encodeURIComponent(payload);
   fetch(`${SURL}?payload=${encoded}`,{method:'GET',mode:'no-cors'})
   .then(()=>{
-    // no-cors এ response পড়া যায় না, কিন্তু পাঠানো হয়ে গেছে
     document.getElementById('sdot').className='sdot';
     document.getElementById('stxt').textContent='Firebase সংযুক্ত';
     const n=nowStr();
     localStorage.setItem('bk_last',n);
     document.getElementById('lbktxt').textContent='ব্যাকআপ: '+n;
-    toast('☁️','ব্যাকআপ সফল',n,'suc');
+    bkSet('','☁️','ব্যাকআপ সম্পন্ন','সর্বশেষ: '+(data.id?'মেমো #'+data.id+' — ':'')+n,'সফল ✓');
+    bkToast('','✅','ব্যাকআপ সম্পন্ন',(data.id?'মেমো #'+data.id+' ':'')+' Sheet-এ সেভ হয়েছে');
+    bkSendPending();
   })
-  .catch(err=>{
-    // Fallback: POST no-cors
+  .catch(()=>{
     fetch(SURL,{method:'POST',mode:'no-cors',body:payload})
     .then(()=>{
       document.getElementById('sdot').className='sdot';
@@ -1211,14 +1505,44 @@ function sendSheets(type,data){
       const n=nowStr();
       localStorage.setItem('bk_last',n);
       document.getElementById('lbktxt').textContent='ব্যাকআপ: '+n;
+      bkSet('','☁️','ব্যাকআপ সম্পন্ন','সর্বশেষ: '+n,'সফল ✓');
+      bkToast('','✅','ব্যাকআপ সম্পন্ন','Sheet-এ সেভ হয়েছে');
+      bkSendPending();
     })
-    .catch(e=>{
-      document.getElementById('sdot').className='sdot warn';
-      document.getElementById('stxt').textContent='ব্যাকআপ ব্যর্থ';
-      console.warn('sendSheets error:',e);
-      toast('⚠️','ব্যাকআপ ব্যর্থ','ইন্টারনেট চেক করুন','warn');
+    .catch(()=>{
+      if(retry<2){
+        bkSet('error','⚠️','Retry করছে...',(retry+1)+' নম্বর চেষ্টা হচ্ছে...','Retry...');
+        setTimeout(()=>sendSheets(type,data,retry+1),30000);
+      } else {
+        const p=JSON.parse(localStorage.getItem(BK_PENDING)||'[]');
+        p.push({type,data,time:Date.now()});
+        localStorage.setItem(BK_PENDING,JSON.stringify(p));
+        document.getElementById('sdot').className='sdot warn';
+        document.getElementById('stxt').textContent='ব্যাকআপ Pending';
+        bkSet('pending','📦','Pending ব্যাকআপ আছে','Internet আসলে automatically পাঠাবে','Pending');
+        bkToast('error','⚠️','ব্যাকআপ Pending','Internet আসলে automatically পাঠানো হবে');
+      }
     });
   });
+}
+
+function bkSendPending(){
+  if(_bkSending)return;
+  const p=JSON.parse(localStorage.getItem(BK_PENDING)||'[]');
+  if(!p.length)return;
+  _bkSending=true;
+  const item=p[0];
+  const payload=JSON.stringify({source:'baki_khata',type:item.type,data:item.data,ts:Date.now()});
+  const encoded=encodeURIComponent(payload);
+  fetch(`${SURL}?payload=${encoded}`,{method:'GET',mode:'no-cors'})
+  .then(()=>{
+    p.shift();
+    localStorage.setItem(BK_PENDING,JSON.stringify(p));
+    _bkSending=false;
+    if(p.length){bkSendPending();}
+    else{bkSet('','☁️','সব Pending ব্যাকআপ সম্পন্ন','সব ডেটা Sheet-এ সেভ হয়েছে','প্রস্তুত ✓');bkToast('','✅','সব Pending ব্যাকআপ সম্পন্ন','সব ডেটা Sheet-এ সেভ হয়েছে');}
+  })
+  .catch(()=>{_bkSending=false;});
 }
 /* ═══════ SHEET FALLBACK ═══════ */
 async function loadSheetFallback(){
