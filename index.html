@@ -476,7 +476,7 @@ function nowStr(){return new Date().toLocaleString('bn-BD',{timeZone:'Asia/Dhaka
 /* Bengali sort */
 const BNO='অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহড়ঢ়য়ৎ';
 function bnfc(n){for(const c of(n||''))if(BNO.includes(c))return c;return'#';}
-function bnsort(n){let k='';for(const c of(n||'')){const i=BNO.indexOf(c);k+=i>=0?String.fromCharCode(0x0600+i):c;}return k;}
+function bnsort(n){let k='';for(const c of(n||'')){const i=BNO.indexOf(c);k+=i>=0?String.fromCharCode(65+i):'\uFFFF';}return k;}
 
 /* Toast */
 function toast(ico,title,desc='',type=''){
@@ -538,7 +538,7 @@ function setA(ch){alpha=ch;renderABar();renderCList(document.getElementById('lsr
 function renderCList(q='',al='all'){
   const grid=document.getElementById('cgrid'),ql=(q||'').trim().toLowerCase();
   let cs=Object.entries(AC).filter(([k,c])=>ql?(c.name||'').toLowerCase().includes(ql)||(c.phone||'').includes(q):al!=='all'?bnfc(c.name)===al:true);
-  cs.sort((a,b)=>bnsort(a[1].name).localeCompare(bnsort(b[1].name)));
+  cs.sort((a,b)=>{const x=bnsort(a[1].name),y=bnsort(b[1].name);return x<y?-1:x>y?1:0;});
   if(!cs.length){grid.innerHTML=`<div class="empty"><div class="ei">📭</div><p>${ql||al!=='all'?'কোনো ফলাফল নেই':'কোনো গ্রাহক নেই'}</p></div>`;return;}
   let h='',ll=null;
   cs.forEach(([key,c])=>{
@@ -647,7 +647,7 @@ function showMemoResults(found,memoNum){
 function srchHist(q){
   const ql=(q||'').trim().toLowerCase(),res=document.getElementById('hres');
   if(!ql){res.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>নাম টাইপ করুন</p></div>`;return;}
-  const ms=Object.entries(AC).filter(([k,c])=>(c.name||'').toLowerCase().includes(ql)||(c.phone||'').includes(q)).sort((a,b)=>bnsort(a[1].name).localeCompare(bnsort(b[1].name)));
+  const ms=Object.entries(AC).filter(([k,c])=>(c.name||'').toLowerCase().includes(ql)||(c.phone||'').includes(q)).sort((a,b)=>{const x=bnsort(a[1].name),y=bnsort(b[1].name);return x<y?-1:x>y?1:0;});
   if(!ms.length){res.innerHTML=`<div class="empty"><div class="ei">😔</div><p>পাওয়া যায়নি</p></div>`;return;}
   res.innerHTML=ms.map(([key,c])=>{const due=c.totalDue||0,bc=due>5000?'bh':due>1000?'bm':due>0?'bl':'bz';return`<div class="cc" onclick="openCust('${key}')"><div class="ci"><h3>👤 ${c.name}</h3><p>📞 ${c.phone||'নম্বর নেই'}</p></div><div class="cdue"><span class="da">${famt(due)}</span><span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span></div></div>`;}).join('');
 }
