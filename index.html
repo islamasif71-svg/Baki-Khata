@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v46 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v76 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <style>
@@ -287,8 +287,9 @@ body.dm .dinfo h2{color:#ddd;}
 <!-- Ledger Tab -->
 <div class="tab-pane active" id="pane-ledger">
   <div class="top-controls">
-    <div class="srch"><span>🔍</span><input type="text" id="lsrch" placeholder="নাম, মোবাইল বা মেমো নম্বর..." oninput="filterC(this.value)"></div>
-    <button class="btn-a bg" id="addCBtn" onclick="openAddC()">➕ নতুন গ্রাহক</button>
+    <div class="srch" style="width:100%;flex-basis:100%;"><span>🔍</span><input type="text" id="lsrch" placeholder="নাম, মোবাইল বা মেমো নম্বর..." oninput="filterC(this.value)"></div>
+    <button class="btn-a bg" id="addCBtn" onclick="openAddC()" style="flex:1;">➕ নতুন গ্রাহক</button>
+    <button class="btn-a bo" id="refreshBtn" onclick="refreshData()" style="flex:1;">🔄 রিফ্রেশ</button>
   </div>
   <div class="alpha-bar" id="abar"><button class="ab all active" onclick="setA('all')">সব</button></div>
   <div id="cgrid" class="cgrid"><div class="empty"><div class="ei">📒</div><p>লোড হচ্ছে...</p></div></div>
@@ -333,7 +334,7 @@ body.dm .dinfo h2{color:#ddd;}
     <button class="del-cust-btn" id="bdelc" onclick="delCust()" style="display:none;">🗑 নাম ডিলিট</button>
   </div>
   <div class="lcard">
-    <h4>📊 চলমান হিসাব <span id="dsum" style="font-size:10px;font-weight:400;color:#a0b4c8;"></span></h4>
+    <h4>📊 চলমান হিসাব <span id="dsum" style="font-size:10px;font-weight:400;color:#a0b4c8;"></span><button onclick="refreshDet()" id="detRefreshBtn" style="margin-left:8px;background:#e3f2fd;color:#0d47a1;border:1.5px solid #90caf9;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700;">🔄 রিফ্রেশ</button></h4>
     <div style="overflow-x:auto;">
       <table class="ltbl">
         <thead><tr><th>তারিখ</th><th>বিবরণ / একশন</th><th>বাকি(+)</th><th>জমা(−)</th><th>ব্যালেন্স</th><th>ধরন</th></tr></thead>
@@ -492,11 +493,11 @@ let AC={},AE={},curKey=null,curEnt=[],alpha='all',rpBasis='accrual',_fd=[];
 /* ═══════ INIT ═══════ */
 window.addEventListener('load',()=>{
   db.ref('.info/connected').on('value',s=>{const ok=s.val(),dot=document.getElementById('sdot'),txt=document.getElementById('stxt');ok?(dot.className='sdot',txt.textContent='Firebase সংযুক্ত'):(dot.className='sdot err',txt.textContent='সংযোগ নেই');});
-  db.ref(`${CB}/customers`).on('value',s=>{
+  db.ref(`${CB}/customers`).once('value',s=>{
     const d=s.val();
     if(d){AC=d;renderABar();renderCList(document.getElementById('lsrch').value,alpha);upStats();}
   });
-  db.ref(`${CB}/entries`).on('value',s=>{
+  db.ref(`${CB}/entries`).once('value',s=>{
     const d=s.val();
     if(d){AE=d;upStats();if(curKey)setTimeout(()=>renderDet(curKey),600);}
   });
@@ -522,6 +523,45 @@ function upStats(){
   document.getElementById('st2').textContent=famt(wd.reduce((s,c)=>s+(c.totalDue||0),0));
   let ec=0;Object.values(AE).forEach(ce=>ec+=Object.keys(ce||{}).length);
   document.getElementById('st4').textContent=ec;
+}
+
+/* ═══════ DETAIL REFRESH ═══════ */
+function refreshDet(){
+  if(!curKey)return;
+  const btn=document.getElementById('detRefreshBtn');
+  btn.textContent='⏳...';btn.disabled=true;
+  db.ref(`${CB}/customers/${curKey}`).once('value',cs=>{
+    if(cs.val()){AC[curKey]=cs.val();document.getElementById('ddue').textContent=famt(cs.val().totalDue||0);}
+  });
+  db.ref(`${CB}/entries/${curKey}`).once('value',es=>{
+    if(es.val())AE[curKey]=es.val();
+    renderDet(curKey);renderPayH(curKey);upStats();
+    btn.textContent='🔄 রিফ্রেশ';btn.disabled=false;
+    toast('✅','রিফ্রেশ হয়েছে','এন্ট্রি আপডেট হয়েছে');
+  });
+}
+
+/* ═══════ REFRESH ═══════ */
+function refreshData(){
+  const btn=document.getElementById('refreshBtn');
+  btn.textContent='⏳ লোড হচ্ছে...';btn.disabled=true;
+  document.getElementById('cgrid').innerHTML=`<div class="empty"><div class="ei">🔄</div><p>আপডেট হচ্ছে...</p></div>`;
+  Promise.all([
+    db.ref(`${CB}/customers`).once('value'),
+    db.ref(`${CB}/entries`).once('value'),
+    db.ref(`${CB}/daily_receipts/${gtd()}`).once('value')
+  ]).then(([cs,es,dr])=>{
+    if(cs.val()){AC=cs.val();}
+    if(es.val()){AE=es.val();}
+    if(dr.val()){document.getElementById('st3').textContent=famt(dr.val().total||0);}
+    renderABar();renderCList(document.getElementById('lsrch').value,alpha);upStats();
+    if(curKey)renderDet(curKey);
+    btn.textContent='🔄 রিফ্রেশ';btn.disabled=false;
+    toast('✅','রিফ্রেশ সম্পন্ন','সব ডেটা আপডেট হয়েছে');
+  }).catch(()=>{
+    btn.textContent='🔄 রিফ্রেশ';btn.disabled=false;
+    toast('❌','রিফ্রেশ ব্যর্থ','পুনরায় চেষ্টা করুন','err');
+  });
 }
 
 /* ═══════ ALPHA BAR ═══════ */
