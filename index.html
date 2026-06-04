@@ -6,6 +6,7 @@
 <title>বাকি খাতা v76 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <style>
 :root{--blue:#1e88e5;--dark:#1a2535;--gold:#ffd600;--red:#d32f2f;--green:#43a047;--orange:#f57f17;--purple:#7b1fa2;--bg:#f0f2f5;--border:#dde3ea;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -457,6 +458,12 @@ const FC={apiKey:"AIzaSyB-4NWcWQgw5vkAnq8r1gZKzM-nS53hIeQ",authDomain:"haji-clot
 firebase.initializeApp(FC);
 const db=firebase.database(), CB='credit_ledger';
 const SURL="https://script.google.com/macros/s/AKfycbwv6fWSguLWk4h1p-BnbZDyiZnJ05gJGeDLk2-EpjcCEsY_geMw2JlTjARWn98YZkBWaw/exec";
+
+// Auth check — Main Code থেকে login না করলে ঢুকতে পারবে না
+firebase.auth().onAuthStateChanged(function(user) {
+    if (user === null) { window.location.href = 'https://islamasif71-svg.github.io/MAIN-POS/'; }
+    // user === undefined মানে এখনো চেক হয়নি — অপেক্ষা করো
+});
 
 /* ═══════ AUTH (PIN বাতিল — সবসময় অ্যাডমিন) ═══════ */
 const isAdmin=true;
