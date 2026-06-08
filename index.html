@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v76 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v120 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -909,7 +909,31 @@ function delEntry(eid, key, amount){
   if(invoiceId){
     db.ref('invoices/' + invoiceId).once('value', snap => {
       const inv = snap.val();
-      if(!inv) return;
+
+      // ✅ Fix v77: inv null হলে মানে Maincode থেকে আগেই মুছে গেছে।
+      // স্টক/invoice ডিলিট দরকার নেই — কিন্তু বাকিখাতার entry + totalDue পরিষ্কার করতে হবে।
+      if(!inv){
+        // ✅ Fix: মেইনকোড থেকে আগেই মুছলে status='cancelled' এবং totalDue আগেই কমানো হয়েছে
+        // তাই শুধু entry মুছো — totalDue আর কমানো যাবে না (ডাবল কমবে)
+        const alreadyCancelled = (e.status === 'cancelled');
+        db.ref(`${CB}/entries/${key}/${eid}`).remove();
+        if(!alreadyCancelled){
+          const deductAmt = (e.remainingDue !== undefined) ? Math.max(0, parseFloat(e.remainingDue)||0) : amount;
+          db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - deductAmt)));
+          db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+          if(e.type==='manual' && e.date){
+            db.ref(`${CB}/daily_credit_entries/${e.date}`).transaction(cur => ({
+              total: Math.max(0, Math.round(((cur&&cur.total)||0) - deductAmt)),
+              lastUpdate: Date.now()
+            }));
+          }
+        } else {
+          db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+        }
+        toast('🗑','এন্ট্রি মুছেছে','মেইনকোড থেকে আগেই বাতিল ছিল — বাকিখাতা পরিষ্কার হয়েছে','err');
+        setTimeout(()=>renderDet(key), 300);
+        return;
+      }
 
       // ① স্টক রিভার্স
       (inv.items||[]).forEach(item => {
