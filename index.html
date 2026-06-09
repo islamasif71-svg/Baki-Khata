@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v120 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v121 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -909,31 +909,7 @@ function delEntry(eid, key, amount){
   if(invoiceId){
     db.ref('invoices/' + invoiceId).once('value', snap => {
       const inv = snap.val();
-
-      // ✅ Fix v77: inv null হলে মানে Maincode থেকে আগেই মুছে গেছে।
-      // স্টক/invoice ডিলিট দরকার নেই — কিন্তু বাকিখাতার entry + totalDue পরিষ্কার করতে হবে।
-      if(!inv){
-        // ✅ Fix: মেইনকোড থেকে আগেই মুছলে status='cancelled' এবং totalDue আগেই কমানো হয়েছে
-        // তাই শুধু entry মুছো — totalDue আর কমানো যাবে না (ডাবল কমবে)
-        const alreadyCancelled = (e.status === 'cancelled');
-        db.ref(`${CB}/entries/${key}/${eid}`).remove();
-        if(!alreadyCancelled){
-          const deductAmt = (e.remainingDue !== undefined) ? Math.max(0, parseFloat(e.remainingDue)||0) : amount;
-          db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - deductAmt)));
-          db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
-          if(e.type==='manual' && e.date){
-            db.ref(`${CB}/daily_credit_entries/${e.date}`).transaction(cur => ({
-              total: Math.max(0, Math.round(((cur&&cur.total)||0) - deductAmt)),
-              lastUpdate: Date.now()
-            }));
-          }
-        } else {
-          db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
-        }
-        toast('🗑','এন্ট্রি মুছেছে','মেইনকোড থেকে আগেই বাতিল ছিল — বাকিখাতা পরিষ্কার হয়েছে','err');
-        setTimeout(()=>renderDet(key), 300);
-        return;
-      }
+      if(!inv) return;
 
       // ① স্টক রিভার্স
       (inv.items||[]).forEach(item => {
@@ -972,21 +948,7 @@ function delEntry(eid, key, amount){
                 const newStatus = newRem >= (cur.originalDue||safeCap) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
                 return {...cur, remainingDue: newRem, status: newStatus};
               });
-              db.ref(`${CB}/entries/${custKey}/${ap.memoId}`).once('value', entSnap => {
-                const entData = entSnap.val();
-                if(entData && entData.type==='sale' && entData.memoId){
-                  db.ref('invoices/' + entData.memoId).transaction(cur => {
-                    if(!cur) return cur;
-                    return {...cur, paid: Math.max(0, Math.round((cur.paid||0) - ap.amount)), due: Math.min(Math.round((cur.due||0) + ap.amount), cur.total||0)};
-                  });
-                }
-                if(entData && entData.type==='manual' && entData.invoiceId){
-                  db.ref('invoices/' + entData.invoiceId).transaction(cur => {
-                    if(!cur) return cur;
-                    return {...cur, paid: Math.max(0, Math.round((cur.paid||0) - ap.amount)), due: Math.min(Math.round((cur.due||0) + ap.amount), cur.total||0)};
-                  });
-                }
-              });
+              // ✅ Fix v121: invoice paid রিভার্স বন্ধ — payment যোগে আপডেট করিনি তাই এখানেও দরকার নেই
             });
             db.ref(`${CB}/payments/${custKey}/${pk}`).remove();
           });
@@ -1063,25 +1025,7 @@ function delPayment(pk,key,amount){
           const newStatus = newRem >= (cur.originalDue||safeCap) ? 'due' : newRem > 0 ? 'partial' : 'cleared';
           return {...cur, remainingDue: newRem, status: newStatus};
         });
-        // ✅ Fix: পেমেন্ট ডিলিট হলে মূল POS sale invoice-এর paid/due পূর্বাবস্থায় ফেরাও
-        const entData=(AE[key]||{})[ap.memoId]||{};
-        if(entData.type==='sale'&&entData.memoId){
-          db.ref('invoices/'+entData.memoId).transaction(cur=>{
-            if(!cur)return cur;
-            const newPaid=Math.max(0,Math.round((cur.paid||0)-ap.amount));
-            const newDue =Math.min(Math.round((cur.due||0)+ap.amount),cur.total||0);
-            return {...cur,paid:newPaid,due:newDue};
-          });
-        }
-        // ✅ Fix: পেমেন্ট ডিলিট হলে manual বাকি এন্ট্রির invoice-এও paid/due পূর্বাবস্থায় ফেরাও
-        if(entData.type==='manual'&&entData.invoiceId){
-          db.ref('invoices/'+entData.invoiceId).transaction(cur=>{
-            if(!cur)return cur;
-            const newPaid=Math.max(0,Math.round((cur.paid||0)-ap.amount));
-            const newDue =Math.min(Math.round((cur.due||0)+ap.amount),cur.total||0);
-            return {...cur,paid:newPaid,due:newDue};
-          });
-        }
+        // ✅ Fix v121: invoice paid রিভার্স বন্ধ — payment যোগে আপডেট করিনি তাই ডিলিটেও দরকার নেই
       });
     }
     toast('🗑','পেমেন্ট মুছেছে',`${famt(amount)} বাকিতে ফেরত গেছে`);
@@ -1271,25 +1215,7 @@ function confPay(){
     apTo.push({memoId:r.eid,date:r.date,amount:r.ap});
     const ns=r.af<=0?'cleared':'partial';
     db.ref(`${CB}/entries/${key}/${r.eid}`).update({remainingDue:Math.max(0,r.af),status:ns});
-    // ✅ Fix: মূল POS sale invoice-এর paid/due আপডেট করো
-    const entData=(AE[key]||{})[r.eid]||{};
-    if(entData.type==='sale'&&entData.memoId){
-      db.ref('invoices/'+entData.memoId).transaction(cur=>{
-        if(!cur)return cur;
-        const newPaid=Math.round((cur.paid||0)+r.ap);
-        const newDue =Math.max(0,Math.round((cur.due||0)-r.ap));
-        return {...cur,paid:newPaid,due:newDue};
-      });
-    }
-    // ✅ Fix: manual বাকি এন্ট্রির invoice-এও paid/due আপডেট করো
-    if(entData.type==='manual'&&entData.invoiceId){
-      db.ref('invoices/'+entData.invoiceId).transaction(cur=>{
-        if(!cur)return cur;
-        const newPaid=Math.round((cur.paid||0)+r.ap);
-        const newDue =Math.max(0,Math.round((cur.due||0)-r.ap));
-        return {...cur,paid:newPaid,due:newDue};
-      });
-    }
+    // ✅ Fix v121: invoice paid আপডেট বন্ধ — header এ ডাবল কাউন্ট ঠেকাতে
   });
   db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur=>Math.max(0,Math.round((cur||0)-totAp)));
   db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
