@@ -962,17 +962,39 @@ function delEntry(eid, key, amount){
         });
       }
 
-      // ⑤ বাকি মেমো: credit_ledger entry বাতিল + totalDue কমাও (Maincode-এর মতো)
-      if(inv.name && inv.name !== 'নগদ' && parseFloat(inv.due) > 0){
+      // ⑥ বাকি মেমো: credit_ledger entry মুছো + totalDue কমাও
+      // ✅ Fix v123: inv.due > 0 condition সরানো — পুরো পেমেন্ট হলেও entry মুছবে
+      // ✅ Fix v123: status:'cancelled' নয় — সরাসরি .remove() যাতে বাকি খাতায় না দেখায়
+      if(inv.source !== 'payment_baki' && inv.name && inv.name !== 'নগদ'){
         const custKey = inv.custKey || key;
         db.ref(`${CB}/entries/${custKey}/${invoiceId}`).once('value', entSnap => {
-          const entData = entSnap.val();
-          const actualRemaining = (entData && 'remainingDue' in entData)
-            ? Math.max(0, parseFloat(entData.remainingDue)||0)
-            : parseFloat(inv.due);
-          db.ref(`${CB}/entries/${custKey}/${invoiceId}/status`).set('cancelled');
-          db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
-          db.ref(`${CB}/customers/${custKey}/lastActivity`).set(Date.now());
+          if(entSnap.exists()){
+            const entData = entSnap.val()||{};
+            const actualRemaining = ('remainingDue' in entData)
+              ? Math.max(0, parseFloat(entData.remainingDue)||0)
+              : Math.max(0, parseFloat(inv.due)||0);
+            db.ref(`${CB}/entries/${custKey}/${invoiceId}`).remove();
+            if(actualRemaining > 0){
+              db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
+            }
+            db.ref(`${CB}/customers/${custKey}/lastActivity`).set(Date.now());
+          } else {
+            db.ref(`${CB}/entries/${custKey}`).orderByChild('invoiceId').equalTo(invoiceId).once('value', manSnap => {
+              if(!manSnap.exists()) return;
+              manSnap.forEach(child => {
+                const entData = child.val()||{};
+                if(entData.status === 'cancelled') return;
+                const actualRemaining = ('remainingDue' in entData)
+                  ? Math.max(0, parseFloat(entData.remainingDue)||0)
+                  : Math.max(0, parseFloat(inv.due)||0);
+                db.ref(`${CB}/entries/${custKey}/${child.key}`).remove();
+                if(actualRemaining > 0){
+                  db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
+                }
+                db.ref(`${CB}/customers/${custKey}/lastActivity`).set(Date.now());
+              });
+            });
+          }
         });
       }
     });
