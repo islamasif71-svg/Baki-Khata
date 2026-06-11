@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v121 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v122 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -802,7 +802,14 @@ function viewEnt(ln){
 function openAddC(){reqAdmin(()=>{document.getElementById('acn').value='';document.getElementById('acp').value='';document.getElementById('aca').value='';document.getElementById('aco').value='';document.getElementById('acd').value=gtd();document.getElementById('acnote').value='';document.getElementById('m-addc').classList.add('open');setTimeout(()=>document.getElementById('acn').focus(),80);});}
 function saveNewC(){
   const name=document.getElementById('acn').value.trim();if(!name){toast('⚠️','নাম দিন','','warn');return;}
-  const phone=document.getElementById('acp').value.trim(),addr=document.getElementById('aca').value.trim(),op=parseFloat(document.getElementById('aco').value)||0,dt=document.getElementById('acd').value||gtd(),note=document.getElementById('acnote').value.trim()||'প্রারম্ভিক বাকি',key=mkey(name);
+  const key=mkey(name);
+  // ✅ Fix v122: একই নামে আগে থেকে কাস্টমার থাকলে warning — duplicate key এ data মিশে যাওয়া ঠেকাতে
+  const dupExists = Object.values(AC).some(c => (c.name||'').trim() === name);
+  if(dupExists){
+    alert('এই নামে আগে থেকে একজন কাস্টমার আছে। নামের পাশে C/O দিয়ে ঠিকানা লিখুন।');
+    return;
+  }
+  const phone=document.getElementById('acp').value.trim(),addr=document.getElementById('aca').value.trim(),op=parseFloat(document.getElementById('aco').value)||0,dt=document.getElementById('acd').value||gtd(),note=document.getElementById('acnote').value.trim()||'প্রারম্ভিক বাকি';
   db.ref(`${CB}/customers/${key}`).transaction(cur=>({name,phone,address:addr,totalDue:Math.round(((cur&&cur.totalDue)||0)+op),lastActivity:Date.now(),createdAt:(cur&&cur.createdAt)||Date.now()}));
   if(op>0){const eid='open_'+Date.now();db.ref(`${CB}/entries/${key}/${eid}`).set({memoId:eid,date:dt,custName:name,custPhone:phone,total:op,paid:0,originalDue:op,remainingDue:op,note,type:'opening',status:'due',createdAt:Date.now()});}
   cm('m-addc');toast('✅','গ্রাহক যোগ হয়েছে',`${name}${op>0?' | বাকি: '+famt(op):''}`);bkPush('new_customer',{name,phone,addr,op,dt,note});
