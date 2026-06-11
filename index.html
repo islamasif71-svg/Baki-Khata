@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v122 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v124 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -842,6 +842,21 @@ function delCust(){
 /* ═══════ DELETE ENTRY ═══════ */
 function delEntry(eid, key, amount){
   if(!eid || !key) return;
+  // ✅ Fix v124: AE cache-এ না থাকলে Firebase থেকে সরাসরি পড়ো
+  const cached = (AE[key]||{})[eid];
+  if(!cached){
+    db.ref(`${CB}/entries/${key}/${eid}`).once('value', snap => {
+      if(snap.exists()){
+        if(!AE[key]) AE[key]={};
+        AE[key][eid] = snap.val();
+      }
+      _delEntryCore(eid, key, amount);
+    });
+    return;
+  }
+  _delEntryCore(eid, key, amount);
+}
+function _delEntryCore(eid, key, amount){
   const e = (AE[key]||{})[eid] || {};
 
   // ── মেমো ID বের করো (Maincode-এর মতো: sale→memoId, manual→invoiceId, return→memoId) ──
@@ -858,7 +873,15 @@ function delEntry(eid, key, amount){
       // Maincode cancelCurrentMemo-এর মতো হুবহু
       db.ref('invoices/' + invoiceId).once('value', snap => {
         const inv = snap.val();
-        if(!inv) return;
+        if(!inv){
+        // invoice না পেলে মানে Maincode আগেই ডিলিট করেছে
+        // totalDue আগেই কমেছে — শুধু entry মুছো, totalDue আর কমাবো না
+        db.ref(`${CB}/entries/${key}/${eid}`).remove();
+        db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+        toast('🗑','এন্ট্রি মুছে গেছে','বাকি খাতা থেকে সরানো হয়েছে','err');
+        setTimeout(()=>renderDet(key), 300);
+        return;
+      }
         // ① স্টক রিভার্স
         (inv.items||[]).forEach(item => {
           const sID = item.sid || item.id;
@@ -916,7 +939,15 @@ function delEntry(eid, key, amount){
   if(invoiceId){
     db.ref('invoices/' + invoiceId).once('value', snap => {
       const inv = snap.val();
-      if(!inv) return;
+      if(!inv){
+        // invoice না পেলে মানে Maincode আগেই ডিলিট করেছে
+        // totalDue আগেই কমেছে — শুধু entry মুছো, totalDue আর কমাবো না
+        db.ref(`${CB}/entries/${key}/${eid}`).remove();
+        db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
+        toast('🗑','এন্ট্রি মুছে গেছে','বাকি খাতা থেকে সরানো হয়েছে','err');
+        setTimeout(()=>renderDet(key), 300);
+        return;
+      }
 
       // ① স্টক রিভার্স
       (inv.items||[]).forEach(item => {
@@ -963,8 +994,8 @@ function delEntry(eid, key, amount){
       }
 
       // ⑥ বাকি মেমো: credit_ledger entry মুছো + totalDue কমাও
-      // ✅ Fix v123: inv.due > 0 condition সরানো — পুরো পেমেন্ট হলেও entry মুছবে
-      // ✅ Fix v123: status:'cancelled' নয় — সরাসরি .remove() যাতে বাকি খাতায় না দেখায়
+      // ✅ Fix v124: inv.due > 0 condition সরানো — পুরো পেমেন্ট হলেও entry মুছবে
+      // ✅ Fix v124: status:'cancelled' নয় — সরাসরি .remove() যাতে বাকি খাতায় না দেখায়
       if(inv.source !== 'payment_baki' && inv.name && inv.name !== 'নগদ'){
         const custKey = inv.custKey || key;
         db.ref(`${CB}/entries/${custKey}/${invoiceId}`).once('value', entSnap => {
