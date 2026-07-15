@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v124 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v125 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -873,7 +873,10 @@ function _delEntryCore(eid, key, amount){
   const e = (AE[key]||{})[eid] || {};
 
   // ── মেমো ID বের করো (Maincode-এর মতো: sale→memoId, manual→invoiceId, return→memoId) ──
-  const invoiceId = (e.type==='manual') ? (e.invoiceId||null) : (e.memoId||null);
+  // ✅ Fix v125: প্রারম্ভিক বাকি (opening) এন্ট্রির memoId আসলে নিজের entry key (open_...),
+  // কোনো real invoice না — আগে এটাকে invoiceId ধরে নেওয়ায় ভুল branch এ চলে যেত
+  // (invoices/open_... Firebase-এ কখনো থাকে না), ফলে entry মুছলেও totalDue কখনো কমতো না।
+  const invoiceId = (e.type==='manual') ? (e.invoiceId||null) : (e.type==='opening' ? null : (e.memoId||null));
 
   // ══ মাল ফেরত ══
   if(e.type === 'return'){
