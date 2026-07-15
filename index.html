@@ -325,7 +325,7 @@ body.dm .dinfo h2{color:#ddd;}
   <div class="dhdr">
     <button class="dback" onclick="backToList()">← ফিরুন</button>
     <div class="dinfo"><h2 id="dname">—</h2><p id="dphone">—</p></div>
-    <div class="ddue"><div class="tdue" id="ddue">০/-</div><small>বর্তমান বাকি</small></div>
+    <div class="ddue"><div class="tdue" id="ddue">০/-</div><small id="ddue-lbl">বর্তমান বাকি</small></div>
   </div>
   <div class="dacts" id="dacts">
     <button class="pbtn" id="bpay" onclick="openPay()" style="display:none;">💰 জমা দিন</button>
@@ -478,6 +478,19 @@ function reqAdmin(fn){fn();}
 const gtd=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka'}).format(new Date());
 function mkey(n){return(n||'').trim().replace(/[\.\$\#\[\]\/\\]/g,'').replace(/\s+/g,'_').substring(0,50)||'unknown';}
 function famt(n){return Math.round(n||0).toLocaleString('en-IN')+'/-';}
+/* ✅ Fix: due>0 হলে দোকান বাকি পাবে, due<0 হলে গ্রাহককে দোকান থেকে টাকা ফেরত দিতে হবে (জমা/এডভান্স) — আগে এই পার্থক্য দেখানো হতো না */
+function dueInfo(due){
+  due=Math.round(due||0);
+  if(due>0) return{text:famt(due),cls:due>5000?'bh':due>1000?'bm':'bl',label:'বাকি'};
+  if(due<0) return{text:'জমা '+famt(-due),cls:'bg',label:'গ্রাহক পাবে'};
+  return{text:famt(0),cls:'bz',label:'পরিশোধ'};
+}
+/* উপরের হেডারে বর্তমান বাকি/জমা দেখানোর জন্য (রং + লেবেল সহ) */
+function setDdue(due){
+  const di=dueInfo(due),el=document.getElementById('ddue'),lb=document.getElementById('ddue-lbl');
+  if(el){el.textContent=di.text;el.style.color=due<0?'#1b5e20':due===0?'#888':'';}
+  if(lb) lb.textContent=due<0?'গ্রাহক পাবে':due===0?'বর্তমান বাকি':'বর্তমান বাকি';
+}
 function fdate(d){if(!d)return'—';try{return new Date(d+'T00:00:00').toLocaleDateString('bn-BD',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Dhaka'});}catch{return d;}}
 function nowStr(){return new Date().toLocaleString('bn-BD',{timeZone:'Asia/Dhaka'});}
 
@@ -538,7 +551,7 @@ function refreshDet(){
   const btn=document.getElementById('detRefreshBtn');
   btn.textContent='⏳...';btn.disabled=true;
   db.ref(`${CB}/customers/${curKey}`).once('value',cs=>{
-    if(cs.val()){AC[curKey]=cs.val();document.getElementById('ddue').textContent=famt(cs.val().totalDue||0);}
+    if(cs.val()){AC[curKey]=cs.val();setDdue(cs.val().totalDue||0);}
   });
   db.ref(`${CB}/entries/${curKey}`).once('value',es=>{
     if(es.val())AE[curKey]=es.val();
@@ -591,13 +604,13 @@ function renderCList(q='',al='all'){
   cs.forEach(([key,c])=>{
     const fl=bnfc(c.name);
     if(!ql&&al==='all'&&fl!==ll){h+=`<div class="alpha-hd">${fl}</div>`;ll=fl;}
-    const due=c.totalDue||0,bc=due>5000?'bh':due>1000?'bm':due>0?'bl':'bz';
+    const due=c.totalDue||0,di=dueInfo(due);
     const ce=AE[key]||{},ec=Object.keys(ce).length,ld=Object.values(ce).map(e=>e.date).filter(Boolean).sort().reverse()[0]||'';
     h+=`<div class="cc" onclick="openCust('${key}')">
       <div class="ci"><h3>👤 ${c.name||'—'}</h3><p>📞 ${c.phone||'নম্বর নেই'} | ${ec}টি এন্ট্রি${ld?' | শেষ: '+fdate(ld):''}</p>${c.address?`<p style="font-size:9px;color:#aaa;">📍 ${c.address}</p>`:''}</div>
       <div class="cdue" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
-        <span class="da">${famt(due)}</span>
-        <span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span>
+        <span class="da">${di.text}</span>
+        <span class="badge ${di.cls}">${di.label}</span>
         ${c.phone&&due>0?`<button class="wa-mini" onclick="event.stopPropagation();openWA('${key}')">💬 WA</button>`:''}
       </div>
     </div>`;
@@ -672,7 +685,7 @@ function showMemoResults(found,memoNum){
   }
   let h=`<div style="padding:8px 12px;font-size:11px;color:#888;background:#f8f9fa;border-radius:8px;margin-bottom:6px;">📄 মেমো #${memoNum} — ${found.length}টি ফলাফল</div>`;
   found.forEach(({key,cust,entry})=>{
-    const due=cust.totalDue||0,bc=due>5000?'bh':due>1000?'bm':due>0?'bl':'bz';
+    const due=cust.totalDue||0,di=dueInfo(due);
     const typeLbl=entry.type==='return'?'🔄 মাল ফেরত':entry.type==='invoice'?'🧾 মেমো':entry.type==='sale'?'🔴 বাকি':'📝 এন্ট্রি';
     const amtShow=entry.type==='invoice'?`মোট: ${famt(entry.originalDue||0)} | নগদ: ${famt(entry.paid||0)} | বাকি: ${famt(entry.due||0)}`:`${famt(Math.abs(entry.originalDue||0))}`;
     h+=`<div class="cc" onclick="openCust('${key}')">
@@ -682,8 +695,8 @@ function showMemoResults(found,memoNum){
         <p style="font-size:10px;color:#e65100;margin-top:3px;">${typeLbl} | ${fdate(entry.date)} | ${amtShow}</p>
       </div>
       <div class="cdue" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
-        <span class="da">${famt(due)}</span>
-        <span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span>
+        <span class="da">${di.text}</span>
+        <span class="badge ${di.cls}">${di.label}</span>
       </div>
     </div>`;
   });
@@ -696,7 +709,7 @@ function srchHist(q){
   if(!ql){res.innerHTML=`<div class="empty"><div class="ei">🔍</div><p>নাম টাইপ করুন</p></div>`;return;}
   const ms=Object.entries(AC).filter(([k,c])=>(c.name||'').toLowerCase().includes(ql)||(c.phone||'').includes(q)).sort((a,b)=>{const x=bnsort(a[1].name),y=bnsort(b[1].name);return x<y?-1:x>y?1:0;});
   if(!ms.length){res.innerHTML=`<div class="empty"><div class="ei">😔</div><p>পাওয়া যায়নি</p></div>`;return;}
-  res.innerHTML=ms.map(([key,c])=>{const due=c.totalDue||0,bc=due>5000?'bh':due>1000?'bm':due>0?'bl':'bz';return`<div class="cc" onclick="openCust('${key}')"><div class="ci"><h3>👤 ${c.name}</h3><p>📞 ${c.phone||'নম্বর নেই'}</p></div><div class="cdue"><span class="da">${famt(due)}</span><span class="badge ${bc}">${due<=0?'পরিশোধ':'বাকি'}</span></div></div>`;}).join('');
+  res.innerHTML=ms.map(([key,c])=>{const due=c.totalDue||0,di=dueInfo(due);return`<div class="cc" onclick="openCust('${key}')"><div class="ci"><h3>👤 ${c.name}</h3><p>📞 ${c.phone||'নম্বর নেই'}</p></div><div class="cdue"><span class="da">${di.text}</span><span class="badge ${di.cls}">${di.label}</span></div></div>`;}).join('');
 }
 
 /* ═══════ CUSTOMER DETAIL ═══════ */
@@ -705,7 +718,7 @@ function openCust(key){
   const c=AC[key]||{};
   document.getElementById('dname').textContent=c.name||'—';
   document.getElementById('dphone').textContent=`📞 ${c.phone||'নম্বর নেই'}${c.address?' | 📍'+c.address:''}`;
-  document.getElementById('ddue').textContent=famt(c.totalDue||0);
+  setDdue(c.totalDue||0);
   ['bpay','bentry','beditc','bdelc'].forEach(i=>{const el=document.getElementById(i);if(el)el.style.display='block';});
   // WhatsApp বাটন — phone থাকলে সবসময় দেখাবে (admin লাগবে না)
   const bwa=document.getElementById('bwa');
@@ -726,7 +739,7 @@ window._lLines={};
 
 function renderDet(key){
   const c=AC[key]||{};
-  document.getElementById('ddue').textContent=famt(c.totalDue||0);
+  setDdue(c.totalDue||0);
   /* entries ও payments একসাথে Promise.all দিয়ে ফেচ করো — nested callback এর timing bug দূর হবে */
   Promise.all([
     db.ref(`${CB}/entries/${key}`).once('value'),
