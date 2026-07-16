@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v126 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v127 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -740,11 +740,25 @@ window._lLines={};
 function renderDet(key){
   const c=AC[key]||{};
   setDdue(c.totalDue||0);
-  /* entries ও payments একসাথে Promise.all দিয়ে ফেচ করো — nested callback এর timing bug দূর হবে */
+  /* ✅ Fix v126: customers/{key} এখন entries/payments-এর সাথেই ফ্রেশ ফেচ করা হচ্ছে।
+     আগে শুধু উপরের লাইনে পেজ-লোড-সময়ের AC ক্যাশ থেকে totalDue দেখানো হতো, যেটা এই
+     সেশনে ডিলিট/পেমেন্ট/এডিট করার পরও সাথে সাথে আপডেট হতো না (পুরনো সংখ্যাই দেখাতো,
+     পরের ফুল রিলোড পর্যন্ত) — ফাংশনের শুরুর setDdue লাইনটা তাৎক্ষণিক ফিডব্যাকের জন্য
+     রাখা হলো, নিচের ফ্রেশ ডেটা এলে এটা সঠিক মান দিয়ে ওভাররাইট করে দেবে।
+  */
   Promise.all([
+    db.ref(`${CB}/customers/${key}`).once('value'),
     db.ref(`${CB}/entries/${key}`).once('value'),
     db.ref(`${CB}/payments/${key}`).once('value')
-  ]).then(([entSnap,paySnap])=>{
+  ]).then(([custSnap,entSnap,paySnap])=>{
+    const freshC=custSnap.val();
+    if(freshC){
+      AC[key]=freshC;
+      setDdue(freshC.totalDue||0);
+      const dn=document.getElementById('dname'),dp=document.getElementById('dphone');
+      if(dn) dn.textContent=freshC.name||'—';
+      if(dp) dp.textContent=`📞 ${freshC.phone||'নম্বর নেই'}${freshC.address?' | 📍'+freshC.address:''}`;
+    }
     let ent=entSnap.val()||{};
     /* Firebase খালি ফিরিয়ে দিলে AE cache ব্যবহার করো (fallback) */
     if(!Object.keys(ent).length && AE[key] && Object.keys(AE[key]).length) ent=AE[key];
@@ -874,6 +888,16 @@ function delEntry(eid, key, amount){
 function _delEntryCore(eid, key, amount){
   const e = (AE[key]||{})[eid] || {};
 
+  // ✅ Fix v126: এন্ট্রিটা local cache-এ না থাকলে (যেমন: আগেই ডিলিট হয়ে গেছে কিন্তু
+  // পুরনো UI-তে বাটন এখনো দেখাচ্ছে) আগে চুপচাপ ভুল branch-এ (sale/manual ধরে নিয়ে)
+  // চলে যেত, যেটা totalDue উল্টো দিকে বদলে দিত। এখন সরাসরি safe fail — কিছু না করে
+  // রিফ্রেশ করে বর্তমান অবস্থা দেখানো হচ্ছে।
+  if(!e.type){
+    toast('⚠️','এন্ট্রি পাওয়া যায়নি','পেজ রিফ্রেশ হচ্ছে, আবার চেষ্টা করুন','warn');
+    setTimeout(()=>renderDet(key), 300);
+    return;
+  }
+
   // ── মেমো ID বের করো (Maincode-এর মতো: sale→memoId, manual→invoiceId, return→memoId) ──
   // ✅ Fix v125: প্রারম্ভিক বাকি (opening) এন্ট্রির memoId আসলে নিজের entry key (open_...),
   // কোনো real invoice না — আগে এটাকে invoiceId ধরে নেওয়ায় ভুল branch এ চলে যেত
@@ -895,6 +919,10 @@ function _delEntryCore(eid, key, amount){
         // invoice না পেলে মানে Maincode আগেই ডিলিট করেছে
         // totalDue আগেই কমেছে — শুধু entry মুছো, totalDue আর কমাবো না
         db.ref(`${CB}/entries/${key}/${eid}`).remove();
+        // ✅ Fix v126: local cache (AE) থেকেও মুছে ফেলা হচ্ছে — নাহলে renderDet-এর
+        // stale-fallback logic এই মোছা entry-টাকেই আবার দেখিয়ে দিতো (মনে হতো ডিলিট হয়নি),
+        // এবং সেখান থেকে আবার ডিলিট চাপলে totalDue দ্বিতীয়বার বদলে যেতো।
+        if(AE[key]) delete AE[key][eid];
         db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
         toast('🗑','এন্ট্রি মুছে গেছে','বাকি খাতা থেকে সরানো হয়েছে','err');
         setTimeout(()=>renderDet(key), 300);
@@ -920,6 +948,10 @@ function _delEntryCore(eid, key, amount){
 
     // ④ বাকিখাতার entry মুছো
     db.ref(`${CB}/entries/${key}/${eid}`).remove();
+    // ✅ Fix v126: local cache (AE) থেকেও সরিয়ে ফেলা হচ্ছে — এটাই ছিল আসল কারণ কেন
+    // কাস্টমারের একমাত্র (শেষ) এন্ট্রি ফেরত হলে ডিলিট করার পরও সেটা ঘুরেফিরে আবার
+    // দেখা যেত, আর দ্বিতীয়বার ডিলিট করলে totalDue দুইবার বেড়ে উল্টো বাকি দেখাতো।
+    if(AE[key]) delete AE[key][eid];
     // ⑤ totalDue বাড়াও (ফেরত মুছলে বাকি বাড়বে)
     db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.round((cur||0) + returnAmt));
     db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
@@ -961,6 +993,8 @@ function _delEntryCore(eid, key, amount){
         // invoice না পেলে মানে Maincode আগেই ডিলিট করেছে
         // totalDue আগেই কমেছে — শুধু entry মুছো, totalDue আর কমাবো না
         db.ref(`${CB}/entries/${key}/${eid}`).remove();
+        // ✅ Fix v126: local cache থেকেও মুছে ফেলা হচ্ছে (return-শাখার মতো একই কারণে)
+        if(AE[key]) delete AE[key][eid];
         db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
         toast('🗑','এন্ট্রি মুছে গেছে','বাকি খাতা থেকে সরানো হয়েছে','err');
         setTimeout(()=>renderDet(key), 300);
@@ -1023,6 +1057,7 @@ function _delEntryCore(eid, key, amount){
               ? Math.max(0, parseFloat(entData.remainingDue)||0)
               : Math.max(0, parseFloat(inv.due)||0);
             db.ref(`${CB}/entries/${custKey}/${invoiceId}`).remove();
+            if(AE[custKey]) delete AE[custKey][invoiceId]; // ✅ Fix v126
             if(actualRemaining > 0){
               db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
             }
@@ -1037,6 +1072,7 @@ function _delEntryCore(eid, key, amount){
                   ? Math.max(0, parseFloat(entData.remainingDue)||0)
                   : Math.max(0, parseFloat(inv.due)||0);
                 db.ref(`${CB}/entries/${custKey}/${child.key}`).remove();
+                if(AE[custKey]) delete AE[custKey][child.key]; // ✅ Fix v126
                 if(actualRemaining > 0){
                   db.ref(`${CB}/customers/${custKey}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - actualRemaining)));
                 }
@@ -1051,6 +1087,7 @@ function _delEntryCore(eid, key, amount){
     // invoiceId নেই (opening ইত্যাদি) — শুধু entry মুছো + totalDue কমাও
     const deductAmt = (e.remainingDue !== undefined) ? e.remainingDue : amount;
     db.ref(`${CB}/entries/${key}/${eid}`).remove();
+    if(AE[key]) delete AE[key][eid]; // ✅ Fix v126
     db.ref(`${CB}/customers/${key}/totalDue`).transaction(cur => Math.max(0, Math.round((cur||0) - deductAmt)));
     db.ref(`${CB}/customers/${key}/lastActivity`).set(Date.now());
   }
