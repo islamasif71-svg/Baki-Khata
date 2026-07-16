@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v125 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v126 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -771,7 +771,9 @@ function renderDet(key){
       const pc=ln.type==='pay'?`<span class="lg">${famt(ln.amount)}</span>`:ln.type==='return'?`<span style="color:#e65100;">${famt(ln.amount)}</span>`:`<span style="color:#ccc;">—</span>`;
       // ✅ FIX: _fbKey আগে নাও — return entry Firebase key="ret_123", memoId="123"
       const _eid=String(ln.entry?._fbKey||ln.entry?.memoId||'').replace(/'/g,"\\'");
-      const adminEnt=(isAdmin&&ln.type!=='pay'&&_eid)?`<button class="edbtn" onclick="openEditEnt('${_eid}','${key.replace(/'/g,"\\'")}')">✏️ এডিট</button> <button class="delbtn" onclick="delEntry('${_eid}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
+      // ✅ Fix v126: return (ফেরত) এন্ট্রিতে এডিট বাটন লুকানো হলো — এর amount ঋণাত্মক সংরক্ষিত থাকে,
+      // সাধারণ এডিট ফর্ম দিয়ে সেভ করলে totalDue ভুল হিসাব হয়ে যায়। ডিলিট বাটন যথারীতি থাকছে।
+      const adminEnt=(isAdmin&&ln.type!=='pay'&&_eid)?`${ln.type!=='return'?`<button class="edbtn" onclick="openEditEnt('${_eid}','${key.replace(/'/g,"\\'")}')">✏️ এডিট</button> `:''}<button class="delbtn" onclick="delEntry('${_eid}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
       const adminPay=(isAdmin&&ln.type==='pay'&&ln.payKey)?`<button class="delbtn" onclick="delPayment('${ln.payKey}','${key.replace(/'/g,"\\'")}',${ln.amount||0})">🗑 ডিলিট</button>`:'';
       const noteCell=`${(ln.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}<br><span style="font-size:9px;color:#aaa;">#${ln.ref}</span><br><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;"><button class="vbtn" onclick="viewEnt(window._lLines['${lid}'])">👁 দেখুন</button>${adminEnt}${adminPay}</div>`;
       h+=`<tr class="${rowCls}"><td style="white-space:nowrap;font-size:10px;">${fdate(ln.date)}</td><td style="font-size:10px;">${noteCell}</td><td>${dc}</td><td>${pc}</td><td>${balHtml}</td><td><span class="sbdg ${typeClass}">${typeLbl}</span></td></tr>`;
@@ -1116,6 +1118,10 @@ function openEditEnt(eid,key){
   _editEntKey=key;_editEntId=eid;
   const e=(AE[key]||{})[eid];
   if(!e){toast('⚠️','এন্ট্রি পাওয়া যায়নি','','warn');return;}
+  // ✅ Fix v126: ফেরত (return) এন্ট্রি এই ফর্ম দিয়ে এডিট করা যাবে না — এর originalDue ঋণাত্মক
+  // সংরক্ষিত থাকে, সাধারণ due-এডিট লজিকে সেভ করলে totalDue-তে বড় ভুল হিসাব হয়ে যায়।
+  // ভুল ফেরত ঠিক করতে হলে: এটা ডিলিট করে সঠিক পরিমাণে নতুন ফেরত মেমো POS থেকে করুন।
+  if(e.type==='return'){toast('⚠️','ফেরত এন্ট্রি এডিট করা যাবে না','ভুল হলে ডিলিট করে POS থেকে নতুন ফেরত মেমো করুন','warn');return;}
   _editEntOldAmt=e.originalDue||e.remainingDue||0;
   document.getElementById('eemlbl').textContent=`এন্ট্রি: #${e.memoRef||eid} | মূল বাকি: ${famt(_editEntOldAmt)}`;
   document.getElementById('eedate').value=e.date||gtd();
