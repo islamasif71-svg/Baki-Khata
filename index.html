@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>বাকি খাতা v127 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
+<title>বাকি খাতা v128 — হাজী মোদাচ্ছের ক্লথ স্টোর</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -863,9 +863,14 @@ function delCust(){
   db.ref(`${CB}/customers/${key}`).remove();
   db.ref(`${CB}/entries/${key}`).remove();
   db.ref(`${CB}/payments/${key}`).remove();
+  // ✅ Fix v127: local cache (AC/AE) থেকেও মুছে ফেলা হচ্ছে — নাহলে লিস্ট/সার্চে
+  // ডিলিট হওয়া কাস্টমার পরবর্তী ফুল রিলোড পর্যন্ত ভুতুড়ে ভাবে থেকে যেতো।
+  delete AC[key];
+  delete AE[key];
   toast('🗑','ডিলিট হয়েছে',`${c.name} মুছে ফেলা হয়েছে`,'err');
   bkPush('delete_customer',{key,name:c.name});
   backToList();
+  renderCList(document.getElementById('lsrch').value,alpha);
 }
 
 /* ═══════ DELETE ENTRY ═══════ */
